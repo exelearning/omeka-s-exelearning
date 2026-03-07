@@ -66,7 +66,8 @@
             var label = saving
                 ? (i18n.saving || 'Saving...')
                 : (i18n.saveButton || 'Save to Omeka');
-            this.saveBtn.innerHTML = '\uD83D\uDCBE ' + label;
+            this.saveBtn.innerHTML =
+                '<span class="o-icon-upload" aria-hidden="true"></span> ' + label;
         },
 
         /**

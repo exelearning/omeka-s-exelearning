@@ -65,6 +65,9 @@
     font-size: 13px;
     cursor: pointer;
     border: 1px solid;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
 }
 
 .exelearning-editor-actions .button-primary {
