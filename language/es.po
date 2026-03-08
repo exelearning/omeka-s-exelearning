@@ -71,6 +71,16 @@ msgstr "Cargando proyecto..."
 msgid "Error"
 msgstr "Error"
 
+#: src/Controller/EditorController.php:110
+#: view/exelearning/admin/media-show.phtml:121
+msgid "Please wait while the file is being saved."
+msgstr "Por favor, espere mientras se guarda el archivo."
+
+#: src/Controller/EditorController.php:111
+#: view/exelearning/admin/media-show.phtml:122
+msgid "You have unsaved changes. Are you sure you want to close?"
+msgstr "Tiene cambios sin guardar. ¿Está seguro de que desea cerrar?"
+
 #: src/Media/FileRenderer/ExeLearningRenderer.php:99
 msgid "Fullscreen"
 msgstr "Pantalla completa"

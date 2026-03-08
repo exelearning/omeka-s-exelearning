@@ -107,6 +107,9 @@ class EditorController extends AbstractActionController
                 'saveButton' => $this->translate('Save to Omeka'),
                 'loading' => $this->translate('Loading project...'),
                 'error' => $this->translate('Error'),
+                'savingWait' => $this->translate('Please wait while the file is being saved.'),
+                'unsavedChanges' => $this->translate('You have unsaved changes. Are you sure you want to close?'),
+                'close' => $this->translate('Close'),
             ],
         ];
 

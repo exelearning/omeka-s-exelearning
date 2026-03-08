@@ -76,6 +76,16 @@ msgstr ""
 msgid "Error"
 msgstr ""
 
+#: src/Controller/EditorController.php:110
+#: view/exelearning/admin/media-show.phtml:121
+msgid "Please wait while the file is being saved."
+msgstr ""
+
+#: src/Controller/EditorController.php:111
+#: view/exelearning/admin/media-show.phtml:122
+msgid "You have unsaved changes. Are you sure you want to close?"
+msgstr ""
+
 #: src/Media/FileRenderer/ExeLearningRenderer.php:99
 msgid "Fullscreen"
 msgstr ""

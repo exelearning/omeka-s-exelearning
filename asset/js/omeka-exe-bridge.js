@@ -17,6 +17,65 @@
 
     console.log('[Omeka-EXE Bridge] Initializing with config:', config);
 
+    var monitoredYdoc = null;
+    var changeNotified = false;
+    var documentLoadedNotified = false;
+
+    /**
+     * Post a protocol message to the parent window.
+     */
+    function postProtocolMessage(message) {
+        if (window.parent && window.parent !== window) {
+            window.parent.postMessage(message, '*');
+        }
+    }
+
+    /**
+     * Monitor Yjs document for changes and notify parent.
+     */
+    function monitorDocumentChanges() {
+        try {
+            var app = window.eXeLearning?.app;
+            var yjsBridge = app?.project?._yjsBridge;
+            var dm = yjsBridge?.documentManager;
+            var ydoc = dm?.ydoc;
+            if (ydoc && typeof ydoc.on === 'function' && ydoc !== monitoredYdoc) {
+                monitoredYdoc = ydoc;
+                changeNotified = false;
+                ydoc.on('update', function() {
+                    if (!changeNotified) {
+                        changeNotified = true;
+                        postProtocolMessage({ type: 'DOCUMENT_CHANGED' });
+                    }
+                });
+            }
+        } catch (error) {
+            console.warn('[Omeka-EXE Bridge] Change monitor failed:', error);
+        }
+    }
+
+    /**
+     * Poll for documentManager and notify parent when document is loaded.
+     */
+    function notifyWhenDocumentLoaded() {
+        var timeout = 30000;
+        var start = Date.now();
+        var check = function() {
+            var app = window.eXeLearning?.app;
+            var manager = app?.project?._yjsBridge?.documentManager;
+            if (manager && !documentLoadedNotified) {
+                documentLoadedNotified = true;
+                postProtocolMessage({ type: 'DOCUMENT_LOADED' });
+                monitorDocumentChanges();
+                return;
+            }
+            if (Date.now() - start < timeout) {
+                setTimeout(check, 150);
+            }
+        };
+        check();
+    }
+
     /**
      * Wait for the eXeLearning app to be ready (legacy fallback)
      */
@@ -302,7 +361,14 @@
                 if (event.data?.type === 'exelearning-request-save') {
                     saveToOmeka();
                 }
+                // Re-check ydoc after parent messages (may trigger after import)
+                setTimeout(function() {
+                    monitorDocumentChanges();
+                }, 500);
             });
+
+            // Notify parent when document is loaded and start monitoring changes
+            notifyWhenDocumentLoaded();
 
             console.log('[Omeka-EXE Bridge] Initialization complete');
         } catch (error) {

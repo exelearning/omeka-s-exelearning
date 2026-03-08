@@ -11,9 +11,11 @@
         iframe: null,
         saveBtn: null,
         closeBtn: null,
+        loadingModal: null,
         currentMediaId: null,
         isOpen: false,
         isSaving: false,
+        hasUnsavedChanges: false,
 
         /**
          * Initialize the editor.
@@ -27,6 +29,12 @@
             if (this.modal) {
                 this.bindEvents();
             }
+
+            // Start save button as disabled (enabled on DOCUMENT_LOADED)
+            if (this.saveBtn) {
+                this.saveBtn.disabled = true;
+                this.updateSaveButtonContent(false);
+            }
         },
 
         /**
@@ -35,14 +43,31 @@
         bindEvents: function() {
             var self = this;
 
-            this.saveBtn?.addEventListener('click', () => self.requestSave());
-            this.closeBtn?.addEventListener('click', () => self.close());
-            window.addEventListener('message', (event) => self.handleMessage(event));
-            document.addEventListener('keydown', (e) => {
+            this.saveBtn?.addEventListener('click', function() { self.requestSave(); });
+            this.closeBtn?.addEventListener('click', function() { self.close(); });
+            window.addEventListener('message', function(event) { self.handleMessage(event); });
+            document.addEventListener('keydown', function(e) {
                 if (e.key === 'Escape' && self.isOpen) {
                     self.close();
                 }
             });
+        },
+
+        /**
+         * Update save button content with icon.
+         *
+         * @param {boolean} saving Whether save is in progress.
+         */
+        updateSaveButtonContent: function(saving) {
+            if (!this.saveBtn) {
+                return;
+            }
+            var i18n = window.exelearningEditorI18n || {};
+            var label = saving
+                ? (i18n.saving || 'Saving...')
+                : (i18n.saveButton || 'Save to Omeka');
+            this.saveBtn.innerHTML =
+                '<span class="o-icon-upload" aria-hidden="true"></span> ' + label;
         },
 
         /**
@@ -60,6 +85,82 @@
         },
 
         /**
+         * Create the loading modal element.
+         */
+        createLoadingModal: function() {
+            if (this.loadingModal) {
+                return;
+            }
+            var i18n = window.exelearningEditorI18n || {};
+            var savingText = i18n.saving || 'Saving...';
+            var waitText = i18n.savingWait || 'Please wait while the file is being saved.';
+            var closeText = i18n.close || 'Close';
+
+            var div = document.createElement('div');
+            div.className = 'exelearning-loading-modal';
+            div.id = 'exelearning-loading-modal';
+            div.innerHTML =
+                '<div class="exelearning-loading-modal__content">' +
+                    '<div class="exelearning-loading-modal__spinner"></div>' +
+                    '<h3 class="exelearning-loading-modal__title">' + savingText + '</h3>' +
+                    '<p class="exelearning-loading-modal__message">' + waitText + '</p>' +
+                    '<div class="exelearning-loading-modal__error">' +
+                        '<p class="exelearning-loading-modal__error-text"></p>' +
+                        '<button type="button" class="button exelearning-loading-modal__close">' + closeText + '</button>' +
+                    '</div>' +
+                '</div>';
+            document.body.appendChild(div);
+            this.loadingModal = div;
+
+            var self = this;
+            div.querySelector('.exelearning-loading-modal__close').addEventListener('click', function() {
+                self.hideLoadingModal();
+            });
+        },
+
+        /**
+         * Show the loading modal.
+         */
+        showLoadingModal: function() {
+            this.createLoadingModal();
+            this.loadingModal.classList.remove('is-error');
+            this.loadingModal.classList.add('is-visible');
+        },
+
+        /**
+         * Hide the loading modal.
+         */
+        hideLoadingModal: function() {
+            if (this.loadingModal) {
+                this.loadingModal.classList.remove('is-visible', 'is-error');
+            }
+        },
+
+        /**
+         * Remove the loading modal from DOM.
+         */
+        removeLoadingModal: function() {
+            if (this.loadingModal) {
+                this.loadingModal.remove();
+                this.loadingModal = null;
+            }
+        },
+
+        /**
+         * Show error in the loading modal.
+         *
+         * @param {string} message The error message.
+         */
+        showLoadingError: function(message) {
+            this.createLoadingModal();
+            this.loadingModal.classList.add('is-error');
+            var errorText = this.loadingModal.querySelector('.exelearning-loading-modal__error-text');
+            if (errorText) {
+                errorText.textContent = message;
+            }
+        },
+
+        /**
          * Set saving state and update button.
          *
          * @param {boolean} saving Whether save is in progress.
@@ -68,7 +169,12 @@
             this.isSaving = saving;
             if (this.saveBtn) {
                 this.saveBtn.disabled = saving;
-                this.saveBtn.textContent = saving ? 'Saving...' : 'Save to Omeka';
+                this.updateSaveButtonContent(saving);
+            }
+            if (saving) {
+                this.showLoadingModal();
+            } else {
+                this.hideLoadingModal();
             }
         },
 
@@ -85,6 +191,7 @@
             }
 
             this.currentMediaId = mediaId;
+            this.hasUnsavedChanges = false;
 
             if (!this.modal) {
                 window.open(editorUrl, '_blank', 'width=1200,height=800');
@@ -104,6 +211,12 @@
             this.isOpen = true;
             this.iframe.src = editorUrl;
             document.body.classList.add('exelearning-editor-open');
+
+            // Start save button as disabled until document loads
+            if (this.saveBtn) {
+                this.saveBtn.disabled = true;
+                this.updateSaveButtonContent(false);
+            }
         },
 
         /**
@@ -114,6 +227,16 @@
                 return;
             }
 
+            // Check for unsaved changes
+            if (this.hasUnsavedChanges) {
+                var i18n = window.exelearningEditorI18n || {};
+                var message = i18n.unsavedChanges ||
+                    'You have unsaved changes. Are you sure you want to close?';
+                if (!window.confirm(message)) {
+                    return;
+                }
+            }
+
             // Destroy the iframe to prevent beforeunload dialog
             this.destroyIframe();
 
@@ -122,6 +245,7 @@
                 this.modal.style.display = 'none';
             }
             this.isOpen = false;
+            this.hasUnsavedChanges = false;
 
             // Remove body class
             document.body.classList.remove('exelearning-editor-open');
@@ -154,16 +278,29 @@
 
                 case 'exelearning-save-complete':
                     this.setSavingState(false);
+                    this.hasUnsavedChanges = false;
                     this.onSaveComplete(data);
                     break;
 
                 case 'exelearning-save-error':
                     this.setSavingState(false);
+                    this.showLoadingError(data.message || 'Save failed');
                     console.error('ExeLearningEditor: Save failed -', data.message || 'Unknown error');
                     break;
 
                 case 'exelearning-close':
                     this.close();
+                    break;
+
+                case 'DOCUMENT_LOADED':
+                    if (!this.isSaving && this.saveBtn) {
+                        this.saveBtn.disabled = false;
+                    }
+                    this.hasUnsavedChanges = false;
+                    break;
+
+                case 'DOCUMENT_CHANGED':
+                    this.hasUnsavedChanges = true;
                     break;
             }
         },

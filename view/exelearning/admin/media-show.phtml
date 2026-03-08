@@ -115,6 +115,15 @@ $this->headScript()->appendFile($this->assetUrl('js/exelearning-editor.js', 'Exe
 </div>
 
 <script>
+// i18n strings for the editor JS
+window.exelearningEditorI18n = {
+    saving: <?= json_encode($this->translate('Saving...')) ?>,
+    saveButton: <?= json_encode($this->translate('Save to Omeka')) ?>,
+    savingWait: <?= json_encode($this->translate('Please wait while the file is being saved.')) ?>,
+    unsavedChanges: <?= json_encode($this->translate('You have unsaved changes. Are you sure you want to close?')) ?>,
+    close: <?= json_encode($this->translate('Close')) ?>
+};
+
 // Add download attribute with original filename to File Derivatives links
 (function() {
     var source = <?= json_encode($media->source()) ?>;

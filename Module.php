@@ -258,10 +258,10 @@ class Module extends AbstractModule
         }
 
         // Use secure content proxy instead of direct file access
-            $previewUrl = $view->url('exelearning-content', ['hash' => $hash, 'file' => 'index.html']);
-            if (!$this->isTeacherModeVisible($media)) {
-                $previewUrl .= '?teacher_mode_visible=0';
-            }
+        $previewUrl = $view->url('exelearning-content', ['hash' => $hash, 'file' => 'index.html']);
+        if (!$this->isTeacherModeVisible($media)) {
+            $previewUrl .= '?teacher_mode_visible=0';
+        }
 
         echo $view->partial('exelearning/admin/media-show', [
             'media' => $media,
@@ -394,7 +394,7 @@ class Module extends AbstractModule
     }
 })();
 JS
-);
+        );
     }
 
     /**
@@ -488,11 +488,26 @@ JS
         $logger = $services->get('Omeka\Logger');
 
         $response = $event->getParam('response');
-        $media = $response->getContent();
+        $entity = $response->getContent();
 
-        $logger->info(sprintf('ExeLearning: handleMediaCreate called for media %d', $media->id()));
+        // The api.create.post event provides an Entity, not a Representation.
+        // Convert to Representation via API read for consistent method calls.
+        $mediaId = $entity->getId();
+        $logger->info(sprintf('ExeLearning: handleMediaCreate called for media %d', $mediaId));
+
+        try {
+            $media = $services->get('Omeka\ApiManager')
+                ->read('media', $mediaId)->getContent();
+        } catch (\Exception $e) {
+            $logger->err(sprintf(
+                'ExeLearning: Could not load media representation for %d: %s',
+                $mediaId,
+                $e->getMessage()
+            ));
+            return;
+        }
+
         $logger->info(sprintf('ExeLearning: Media filename: %s', $media->filename() ?? 'null'));
-        $logger->info(sprintf('ExeLearning: Media original URL: %s', $media->originalUrl() ?? 'null'));
 
         // Check if this is an eXeLearning file
         if (!$this->isExeLearningFile($media)) {
@@ -506,23 +521,14 @@ JS
             $elpService = $services->get(Service\ElpFileService::class);
             $result = $elpService->processUploadedFile($media);
             $logger->info(sprintf(
-                'ExeLearning: File processed successfully. Hash: %s, HasPreview: %s, ExtractPath: %s',
+                'ExeLearning: File processed successfully. Hash: %s, HasPreview: %s',
                 $result['hash'],
-                $result['hasPreview'] ? 'yes' : 'no',
-                $result['extractPath'] ?? 'null'
-            ));
-
-            // Verify media data was saved by re-reading
-            $mediaId = $media->id();
-            $verifyMedia = $services->get('Omeka\ApiManager')->read('media', $mediaId)->getContent();
-            $logger->info(sprintf(
-                'ExeLearning: Verification - media data after save: %s',
-                json_encode($verifyMedia->mediaData())
+                $result['hasPreview'] ? 'yes' : 'no'
             ));
         } catch (\Exception $e) {
             $logger->err(sprintf(
                 'ExeLearning: Failed to process uploaded file for media %d: %s',
-                $media->id(),
+                $mediaId,
                 $e->getMessage()
             ));
             $logger->err('ExeLearning: Stack trace: ' . $e->getTraceAsString());

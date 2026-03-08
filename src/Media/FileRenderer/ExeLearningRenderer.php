@@ -39,27 +39,18 @@ class ExeLearningRenderer implements RendererInterface
     public function render(PhpRenderer $view, MediaRepresentation $media, array $options = []): string
     {
         try {
-            // Debug: log what we receive
-            error_log(sprintf('[ExeLearning Renderer] Rendering media %d, filename: %s', $media->id(), $media->filename()));
-            error_log(sprintf('[ExeLearning Renderer] Media data: %s', json_encode($media->mediaData())));
-
             // Check if this is an eXeLearning file
             if (!$this->isExeLearningFile($media)) {
-                error_log('[ExeLearning Renderer] Not an eXeLearning file, showing fallback');
                 return $this->renderFallback($view, $media);
             }
 
             $hash = $this->elpService->getMediaHash($media);
             $hasPreview = $this->elpService->hasPreview($media);
 
-            error_log(sprintf('[ExeLearning Renderer] hash=%s, hasPreview=%s', $hash ?? 'null', $hasPreview ? 'true' : 'false'));
-
             if (!$hash || !$hasPreview) {
-                error_log('[ExeLearning Renderer] No hash or preview, showing fallback');
                 return $this->renderFallback($view, $media);
             }
         } catch (\Exception $e) {
-            error_log(sprintf('[ExeLearning Renderer] Exception: %s', $e->getMessage()));
             return $this->renderFallback($view, $media);
         }
 
