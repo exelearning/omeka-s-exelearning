@@ -727,4 +727,319 @@ class ApiControllerTest extends TestCase
 
         $this->assertNull($result);
     }
+
+    // =========================================================================
+    // setTeacherModeAction() tests
+    // =========================================================================
+
+    public function testSetTeacherModeActionRequiresPostMethod(): void
+    {
+        $request = new class {
+            public function isPost(): bool { return false; }
+        };
+
+        $this->controller->setRequest($request);
+        $result = $this->controller->setTeacherModeAction();
+
+        $this->assertInstanceOf(JsonModel::class, $result);
+        $this->assertEquals(405, $this->controller->getResponse()->getStatusCode());
+        $this->assertEquals('Method not allowed', $result->getVariables()['message']);
+    }
+
+    public function testSetTeacherModeActionRequiresAuthentication(): void
+    {
+        $request = new class {
+            public function isPost(): bool { return true; }
+        };
+
+        $this->controller->setRequest($request);
+        $this->controller->setIdentity(null);
+
+        $result = $this->controller->setTeacherModeAction();
+
+        $this->assertInstanceOf(JsonModel::class, $result);
+        $this->assertEquals(401, $this->controller->getResponse()->getStatusCode());
+        $this->assertEquals('Unauthorized', $result->getVariables()['message']);
+    }
+
+    public function testSetTeacherModeActionRequiresMediaId(): void
+    {
+        $request = new class {
+            public function isPost(): bool { return true; }
+            public function getPost($key = null, $default = null) { return $default; }
+        };
+
+        $identity = new class {
+            public function getId(): int { return 1; }
+            public function getName(): string { return 'Test User'; }
+        };
+
+        $this->controller->setRequest($request);
+        $this->controller->setIdentity($identity);
+        $this->controller->setRouteParams([]);
+
+        $result = $this->controller->setTeacherModeAction();
+
+        $this->assertInstanceOf(JsonModel::class, $result);
+        $this->assertEquals(400, $this->controller->getResponse()->getStatusCode());
+        $this->assertEquals('Media ID required', $result->getVariables()['message']);
+    }
+
+    public function testSetTeacherModeActionReturns404WhenMediaNotFound(): void
+    {
+        $request = new class {
+            public function isPost(): bool { return true; }
+            public function getPost($key = null, $default = null) { return $default; }
+        };
+
+        $identity = new class {
+            public function getId(): int { return 1; }
+            public function getName(): string { return 'Test User'; }
+        };
+
+        $this->controller->setRequest($request);
+        $this->controller->setIdentity($identity);
+        $this->controller->setRouteParams(['id' => '999']);
+
+        $result = $this->controller->setTeacherModeAction();
+
+        $this->assertInstanceOf(JsonModel::class, $result);
+        $this->assertEquals(404, $this->controller->getResponse()->getStatusCode());
+        $this->assertEquals('Media not found', $result->getVariables()['message']);
+    }
+
+    public function testSetTeacherModeActionReturns403WhenUserNotAllowed(): void
+    {
+        $request = new class {
+            public function isPost(): bool { return true; }
+            public function getPost($key = null, $default = null) { return $default; }
+        };
+
+        $identity = new class {
+            public function getId(): int { return 1; }
+            public function getName(): string { return 'Test User'; }
+        };
+
+        $media = new \Omeka\Api\Representation\MediaRepresentation(
+            'http://example.com/files/original/test.elpx',
+            'Test ELP',
+            'test.elpx',
+            123
+        );
+
+        $this->controller->setRequest($request);
+        $this->controller->setIdentity($identity);
+        $this->controller->setRouteParams(['id' => '123']);
+        $this->controller->addMedia(123, $media);
+        $this->controller->setUserAllowed(false);
+
+        $result = $this->controller->setTeacherModeAction();
+
+        $this->assertInstanceOf(JsonModel::class, $result);
+        $this->assertEquals(403, $this->controller->getResponse()->getStatusCode());
+        $this->assertEquals('Forbidden', $result->getVariables()['message']);
+    }
+
+    public function testSetTeacherModeActionSuccessVisible(): void
+    {
+        $request = new class {
+            public function isPost(): bool { return true; }
+            public function getPost($key = null, $default = null) {
+                if ($key === 'teacher_mode_visible') {
+                    return '1';
+                }
+                return $default;
+            }
+        };
+
+        $identity = new class {
+            public function getId(): int { return 1; }
+            public function getName(): string { return 'Test User'; }
+        };
+
+        $media = new \Omeka\Api\Representation\MediaRepresentation(
+            'http://example.com/files/original/test.elpx',
+            'Test ELP',
+            'test.elpx',
+            123
+        );
+
+        $this->elpService->expects($this->once())
+            ->method('setTeacherModeVisible')
+            ->with($media, true);
+
+        $this->controller->setRequest($request);
+        $this->controller->setIdentity($identity);
+        $this->controller->setRouteParams(['id' => '123']);
+        $this->controller->addMedia(123, $media);
+        $this->controller->setUserAllowed(true);
+
+        $result = $this->controller->setTeacherModeAction();
+
+        $this->assertInstanceOf(JsonModel::class, $result);
+        $this->assertTrue($result->getVariables()['success']);
+        $this->assertEquals(123, $result->getVariables()['media_id']);
+        $this->assertTrue($result->getVariables()['teacherModeVisible']);
+    }
+
+    public function testSetTeacherModeActionSuccessHidden(): void
+    {
+        $request = new class {
+            public function isPost(): bool { return true; }
+            public function getPost($key = null, $default = null) {
+                if ($key === 'teacher_mode_visible') {
+                    return '0';
+                }
+                return $default;
+            }
+        };
+
+        $identity = new class {
+            public function getId(): int { return 1; }
+            public function getName(): string { return 'Test User'; }
+        };
+
+        $media = new \Omeka\Api\Representation\MediaRepresentation(
+            'http://example.com/files/original/test.elpx',
+            'Test ELP',
+            'test.elpx',
+            123
+        );
+
+        $this->elpService->expects($this->once())
+            ->method('setTeacherModeVisible')
+            ->with($media, false);
+
+        $this->controller->setRequest($request);
+        $this->controller->setIdentity($identity);
+        $this->controller->setRouteParams(['id' => '123']);
+        $this->controller->addMedia(123, $media);
+        $this->controller->setUserAllowed(true);
+
+        $result = $this->controller->setTeacherModeAction();
+
+        $this->assertInstanceOf(JsonModel::class, $result);
+        $this->assertTrue($result->getVariables()['success']);
+        $this->assertFalse($result->getVariables()['teacherModeVisible']);
+    }
+
+    public function testSetTeacherModeActionReturns500OnException(): void
+    {
+        $request = new class {
+            public function isPost(): bool { return true; }
+            public function getPost($key = null, $default = null) {
+                if ($key === 'teacher_mode_visible') {
+                    return '1';
+                }
+                return $default;
+            }
+        };
+
+        $identity = new class {
+            public function getId(): int { return 1; }
+            public function getName(): string { return 'Test User'; }
+        };
+
+        $media = new \Omeka\Api\Representation\MediaRepresentation(
+            'http://example.com/files/original/test.elpx',
+            'Test ELP',
+            'test.elpx',
+            123
+        );
+
+        $this->elpService->method('setTeacherModeVisible')
+            ->willThrowException(new \Exception('Database error'));
+
+        $this->controller->setRequest($request);
+        $this->controller->setIdentity($identity);
+        $this->controller->setRouteParams(['id' => '123']);
+        $this->controller->addMedia(123, $media);
+        $this->controller->setUserAllowed(true);
+
+        $result = $this->controller->setTeacherModeAction();
+
+        $this->assertInstanceOf(JsonModel::class, $result);
+        $this->assertEquals(500, $this->controller->getResponse()->getStatusCode());
+        $this->assertStringContainsString('Update failed', $result->getVariables()['message']);
+    }
+
+    public function testSetTeacherModeActionWithFalseString(): void
+    {
+        $request = new class {
+            public function isPost(): bool { return true; }
+            public function getPost($key = null, $default = null) {
+                if ($key === 'teacher_mode_visible') {
+                    return 'false';
+                }
+                return $default;
+            }
+        };
+
+        $identity = new class {
+            public function getId(): int { return 1; }
+            public function getName(): string { return 'Test User'; }
+        };
+
+        $media = new \Omeka\Api\Representation\MediaRepresentation(
+            'http://example.com/files/original/test.elpx',
+            'Test ELP',
+            'test.elpx',
+            123
+        );
+
+        $this->elpService->expects($this->once())
+            ->method('setTeacherModeVisible')
+            ->with($media, false);
+
+        $this->controller->setRequest($request);
+        $this->controller->setIdentity($identity);
+        $this->controller->setRouteParams(['id' => '123']);
+        $this->controller->addMedia(123, $media);
+        $this->controller->setUserAllowed(true);
+
+        $result = $this->controller->setTeacherModeAction();
+
+        $this->assertTrue($result->getVariables()['success']);
+        $this->assertFalse($result->getVariables()['teacherModeVisible']);
+    }
+
+    public function testSetTeacherModeActionWithNoString(): void
+    {
+        $request = new class {
+            public function isPost(): bool { return true; }
+            public function getPost($key = null, $default = null) {
+                if ($key === 'teacher_mode_visible') {
+                    return 'no';
+                }
+                return $default;
+            }
+        };
+
+        $identity = new class {
+            public function getId(): int { return 1; }
+            public function getName(): string { return 'Test User'; }
+        };
+
+        $media = new \Omeka\Api\Representation\MediaRepresentation(
+            'http://example.com/files/original/test.elpx',
+            'Test ELP',
+            'test.elpx',
+            123
+        );
+
+        $this->elpService->expects($this->once())
+            ->method('setTeacherModeVisible')
+            ->with($media, false);
+
+        $this->controller->setRequest($request);
+        $this->controller->setIdentity($identity);
+        $this->controller->setRouteParams(['id' => '123']);
+        $this->controller->addMedia(123, $media);
+        $this->controller->setUserAllowed(true);
+
+        $result = $this->controller->setTeacherModeAction();
+
+        $this->assertTrue($result->getVariables()['success']);
+        $this->assertFalse($result->getVariables()['teacherModeVisible']);
+    }
 }

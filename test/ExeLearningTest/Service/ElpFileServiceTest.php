@@ -478,6 +478,120 @@ class ElpFileServiceTest extends TestCase
     }
 
     // =========================================================================
+    // isTeacherModeVisible() tests
+    // =========================================================================
+
+    public function testIsTeacherModeVisibleReturnsTrueWhenNotSet(): void
+    {
+        $media = new MediaRepresentation(
+            'http://example.com/file.elpx',
+            'Test File',
+            'file.elpx',
+            1,
+            []
+        );
+
+        $this->assertTrue($this->service->isTeacherModeVisible($media));
+    }
+
+    public function testIsTeacherModeVisibleReturnsFalseForZero(): void
+    {
+        $media = new MediaRepresentation(
+            'http://example.com/file.elpx',
+            'Test File',
+            'file.elpx',
+            1,
+            ['exelearning_teacher_mode_visible' => '0']
+        );
+
+        $this->assertFalse($this->service->isTeacherModeVisible($media));
+    }
+
+    public function testIsTeacherModeVisibleReturnsFalseForFalse(): void
+    {
+        $media = new MediaRepresentation(
+            'http://example.com/file.elpx',
+            'Test File',
+            'file.elpx',
+            1,
+            ['exelearning_teacher_mode_visible' => 'false']
+        );
+
+        $this->assertFalse($this->service->isTeacherModeVisible($media));
+    }
+
+    public function testIsTeacherModeVisibleReturnsFalseForNo(): void
+    {
+        $media = new MediaRepresentation(
+            'http://example.com/file.elpx',
+            'Test File',
+            'file.elpx',
+            1,
+            ['exelearning_teacher_mode_visible' => 'no']
+        );
+
+        $this->assertFalse($this->service->isTeacherModeVisible($media));
+    }
+
+    public function testIsTeacherModeVisibleReturnsTrueForOne(): void
+    {
+        $media = new MediaRepresentation(
+            'http://example.com/file.elpx',
+            'Test File',
+            'file.elpx',
+            1,
+            ['exelearning_teacher_mode_visible' => '1']
+        );
+
+        $this->assertTrue($this->service->isTeacherModeVisible($media));
+    }
+
+    public function testIsTeacherModeVisibleReturnsTrueForYes(): void
+    {
+        $media = new MediaRepresentation(
+            'http://example.com/file.elpx',
+            'Test File',
+            'file.elpx',
+            1,
+            ['exelearning_teacher_mode_visible' => 'yes']
+        );
+
+        $this->assertTrue($this->service->isTeacherModeVisible($media));
+    }
+
+    // =========================================================================
+    // setTeacherModeVisible() tests
+    // =========================================================================
+
+    public function testSetTeacherModeVisibleCallsUpdateMediaData(): void
+    {
+        $media = new MediaRepresentation(
+            'http://example.com/file.elpx',
+            'Test File',
+            'file.elpx',
+            1
+        );
+
+        // Should not throw - updateMediaData handles entity not found gracefully
+        $this->service->setTeacherModeVisible($media, true);
+        $this->assertTrue(true);
+    }
+
+    public function testSetTeacherModeVisibleFalse(): void
+    {
+        $media = new MediaRepresentation(
+            'http://example.com/file.elpx',
+            'Test File',
+            'file.elpx',
+            1
+        );
+
+        // Should not throw
+        $this->service->setTeacherModeVisible($media, false);
+        $this->assertTrue(true);
+    }
+
+    // =========================================================================
     // Additional validateElpFile tests
     // =========================================================================
 
