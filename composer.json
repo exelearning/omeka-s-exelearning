@@ -1,5 +1,5 @@
 {
-    "name": "ateeducacion/omeka-s-exelearning",
+    "name": "exelearning/omeka-s-exelearning",
     "description": "Upload, view and edit eXeLearning content (.elpx files) in Omeka S",
     "type": "omeka-s-module",
     "license": "GPL-3.0-or-later",
@@ -9,9 +9,9 @@
             "email": "ate.educacion@gobiernodecanarias.org"
         }
     ],
-    "homepage": "https://github.com/ateeducacion/omeka-s-exelearning",
+    "homepage": "https://github.com/exelearning/omeka-s-exelearning",
     "support": {
-        "issues": "https://github.com/ateeducacion/omeka-s-exelearning/issues"
+        "issues": "https://github.com/exelearning/omeka-s-exelearning/issues"
     },
     "keywords": [
         "Omeka S",

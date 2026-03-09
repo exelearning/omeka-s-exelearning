@@ -1,13 +1,13 @@
 # eXeLearning
 
-![CI](https://img.shields.io/github/actions/workflow/status/ateeducacion/omeka-s-exelearning/ci.yml?label=CI)
-[![codecov](https://codecov.io/gh/ateeducacion/omeka-s-exelearning/graph/badge.svg)](https://codecov.io/gh/ateeducacion/omeka-s-exelearning)
+![CI](https://img.shields.io/github/actions/workflow/status/exelearning/omeka-s-exelearning/ci.yml?label=CI)
+[![codecov](https://codecov.io/gh/exelearning/omeka-s-exelearning/graph/badge.svg)](https://codecov.io/gh/exelearning/omeka-s-exelearning)
 ![Omeka S Version](https://img.shields.io/badge/Omeka_S-%3E%3D3.0-blue)
 ![PHP Version](https://img.shields.io/badge/PHP-%3E%3D%207.4-8892bf)
 ![License: AGPL v3](https://img.shields.io/badge/License-AGPLv3-blue.svg)
-![Downloads](https://img.shields.io/github/downloads/ateeducacion/omeka-s-exelearning/total)
-![Last Commit](https://img.shields.io/github/last-commit/ateeducacion/omeka-s-exelearning)
-![Open Issues](https://img.shields.io/github/issues/ateeducacion/omeka-s-exelearning)
+![Downloads](https://img.shields.io/github/downloads/exelearning/omeka-s-exelearning/total)
+![Last Commit](https://img.shields.io/github/last-commit/exelearning/omeka-s-exelearning)
+![Open Issues](https://img.shields.io/github/issues/exelearning/omeka-s-exelearning)
 
 Omeka S module for eXeLearning content management. Upload, view and edit eXeLearning `.elpx` files directly within Omeka S.
 
@@ -23,7 +23,7 @@ Omeka S module for eXeLearning content management. Upload, view and edit eXeLear
 
 ### From Releases (Recommended)
 
-1. **Download the latest release** from the [GitHub Releases page](https://github.com/ateeducacion/omeka-s-exelearning/releases).
+1. **Download the latest release** from the [GitHub Releases page](https://github.com/exelearning/omeka-s-exelearning/releases).
 2. Extract to your Omeka S `modules` directory as `ExeLearning`.
 3. Log in to the admin panel, go to **Modules** and click **Install**.
 
@@ -48,7 +48,7 @@ Apache is supported automatically via the included `.htaccess` file.
 ### From Source (Development)
 
 ```bash
-git clone https://github.com/ateeducacion/omeka-s-exelearning.git
+git clone https://github.com/exelearning/omeka-s-exelearning.git
 cd omeka-s-exelearning
 make build-editor
 ```
@@ -59,7 +59,7 @@ By default, `make build-editor` fetches `https://github.com/exelearning/exelearn
 EXELEARNING_EDITOR_REF=vX.Y.Z EXELEARNING_EDITOR_REF_TYPE=tag make build-editor
 ```
 
-> **Important:** Cloning the repository without building the editor will show version `0.0.0` and the editor will not work. Always download from [Releases](https://github.com/ateeducacion/omeka-s-exelearning/releases) for production use.
+> **Important:** Cloning the repository without building the editor will show version `0.0.0` and the editor will not work. Always download from [Releases](https://github.com/exelearning/omeka-s-exelearning/releases) for production use.
 
 ## Usage
 
