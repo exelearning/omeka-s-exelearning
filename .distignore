@@ -4,7 +4,7 @@
 .aider*
 .DS_Store
 .distignore
-exelearning/
+/exelearning/
 test/
 vendor/
 themes/
