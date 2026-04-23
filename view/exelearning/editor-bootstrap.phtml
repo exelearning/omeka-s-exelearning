@@ -9,6 +9,7 @@
  * @var \Omeka\Api\Representation\MediaRepresentation $media
  * @var array $config
  * @var string $editorBaseUrl
+ * @var array $themeRegistryOverride
  */
 
 // Load editor template from local dist.
@@ -24,6 +25,15 @@ if (empty($template)) {
 // Prepare JSON-safe configuration
 $configJson = json_encode($config, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
 $editorBaseUrlJs = json_encode($editorBaseUrl, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
+$themeOverrideJson = json_encode(
+    $themeRegistryOverride ?? [
+        'disabledBuiltins' => [],
+        'uploaded' => [],
+        'blockImportInstall' => false,
+        'fallbackTheme' => 'base',
+    ],
+    JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP
+);
 
 // Build the configuration script
 $configScript = <<<SCRIPT
@@ -55,6 +65,21 @@ $configScript = <<<SCRIPT
         // Override static mode detection for Omeka S
         window.__EXE_STATIC_MODE__ = true;
         window.__EXE_OMEKA_MODE__ = true;
+
+        // Approved style registry for the embedded editor. The editor
+        // merges disabledBuiltins/uploaded at bundle load time and
+        // refuses any install-from-content path while blockImportInstall
+        // is truthy. See exelearning/exelearning#1722.
+        //
+        // userStyles is the pre-existing ONLINE_THEMES_INSTALL flag the
+        // editor consults before showing the "install this project's
+        // theme?" modal; we mirror blockImportInstall onto it.
+        window.eXeLearning = window.eXeLearning || {};
+        window.eXeLearning.config = window.eXeLearning.config || {};
+        window.eXeLearning.config.themeRegistryOverride = {$themeOverrideJson};
+        window.eXeLearning.config.userStyles =
+            window.eXeLearning.config.themeRegistryOverride &&
+            window.eXeLearning.config.themeRegistryOverride.blockImportInstall ? 0 : 1;
 
         // Embedding configuration for the editor.
         // The editor reads this in RuntimeConfig.fromEnvironment() and applies

@@ -11,7 +11,8 @@ themes/
 dist/
 asset/static
 
-# Local editor checkout fetched during build
-exelearning/
+# Local editor checkout fetched during build (anchored to repo root so it
+# does not also ignore view/exelearning/ or similar subtrees).
+/exelearning/
 .env
 .playwright-mcp/

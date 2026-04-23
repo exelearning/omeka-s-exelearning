@@ -22,23 +22,29 @@ return [
             Controller\ApiController::class => Controller\ApiControllerFactory::class,
             Controller\EditorController::class => Controller\EditorControllerFactory::class,
             Controller\ContentController::class => Controller\ContentControllerFactory::class,
+            Controller\StylesServeController::class => Controller\StylesServeControllerFactory::class,
+            Controller\Admin\StylesController::class => Controller\Admin\StylesControllerFactory::class,
         ],
         'aliases' => [
             'ExeLearning\Controller\Editor' => Controller\EditorController::class,
             'ExeLearning\Controller\Api' => Controller\ApiController::class,
             'ExeLearning\Controller\Content' => Controller\ContentController::class,
+            'ExeLearning\Controller\StylesServe' => Controller\StylesServeController::class,
+            'ExeLearning\Controller\Admin\Styles' => Controller\Admin\StylesController::class,
         ],
     ],
 
     'service_manager' => [
         'factories' => [
             Service\ElpFileService::class => Service\ElpFileServiceFactory::class,
+            Service\StylesService::class => Service\StylesServiceFactory::class,
         ],
     ],
 
     'form_elements' => [
         'invokables' => [
             Form\ConfigForm::class => Form\ConfigForm::class,
+            Form\StylesUploadForm::class => Form\StylesUploadForm::class,
         ],
     ],
 
@@ -71,6 +77,19 @@ return [
                         'controller' => 'Content',
                         'action' => 'serve',
                         'file' => 'index.html',
+                    ],
+                ],
+            ],
+            'exelearning-styles-serve' => [
+                'type' => Regex::class,
+                'options' => [
+                    'regex' => '/exelearning/styles/(?<slug>[a-z0-9-]+)(?:/(?<file>.*))?',
+                    'spec' => '/exelearning/styles/%slug%/%file%',
+                    'defaults' => [
+                        '__NAMESPACE__' => 'ExeLearning\Controller',
+                        'controller' => 'StylesServe',
+                        'action' => 'serve',
+                        'file' => 'style.css',
                     ],
                 ],
             ],
@@ -180,7 +199,60 @@ return [
                             ],
                         ],
                     ],
+                    'exelearning-styles' => [
+                        'type' => Literal::class,
+                        'options' => [
+                            'route' => '/exelearning/styles',
+                            'defaults' => [
+                                '__NAMESPACE__' => 'ExeLearning\Controller\Admin',
+                                'controller' => 'Styles',
+                                'action' => 'index',
+                            ],
+                        ],
+                        'may_terminate' => true,
+                        'child_routes' => [
+                            'toggle-builtin' => [
+                                'type' => Literal::class,
+                                'options' => [
+                                    'route' => '/toggle-builtin',
+                                    'defaults' => ['action' => 'toggleBuiltin'],
+                                ],
+                            ],
+                            'toggle-uploaded' => [
+                                'type' => Literal::class,
+                                'options' => [
+                                    'route' => '/toggle-uploaded',
+                                    'defaults' => ['action' => 'toggleUploaded'],
+                                ],
+                            ],
+                            'delete' => [
+                                'type' => Literal::class,
+                                'options' => [
+                                    'route' => '/delete',
+                                    'defaults' => ['action' => 'delete'],
+                                ],
+                            ],
+                            'toggle-block-import' => [
+                                'type' => Literal::class,
+                                'options' => [
+                                    'route' => '/toggle-block-import',
+                                    'defaults' => ['action' => 'toggleBlockImport'],
+                                ],
+                            ],
+                        ],
+                    ],
                 ],
+            ],
+        ],
+    ],
+
+    'navigation' => [
+        'AdminModule' => [
+            [
+                'label' => 'eXeLearning styles', // @translate
+                'route' => 'admin/exelearning-styles',
+                'resource' => 'ExeLearning\Controller\Admin\Styles',
+                'privilege' => 'index',
             ],
         ],
     ],
