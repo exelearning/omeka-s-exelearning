@@ -26,8 +26,19 @@ class StylesServeController extends AbstractActionController
 
     public function serveAction()
     {
-        $slug = (string) $this->params('slug', '');
-        $file = (string) $this->params('file', 'style.css');
+        return $this->serveStyle(
+            (string) $this->params('slug', ''),
+            (string) $this->params('file', 'style.css')
+        );
+    }
+
+    /**
+     * Resolve a ({slug}, {file}) pair against the registered style dir and
+     * write the response. Exposed (not private) so tests can exercise the
+     * routing-independent half of the serve path.
+     */
+    public function serveStyle(string $slug, string $file): Response
+    {
         $file = ltrim($file, '/');
         if ($slug === '' || strpos($file, '..') !== false || strpos($slug, '..') !== false) {
             return $this->notFound();

@@ -198,6 +198,200 @@ class StylesServiceTest extends TestCase
         $this->assertCount(1, $this->svc->extractThemesFromBundle($nested));
         $this->assertSame([], $this->svc->extractThemesFromBundle([]));
         $this->assertSame([], $this->svc->extractThemesFromBundle(['themes' => 'nope']));
+        // Rows without a name are skipped.
+        $this->assertSame([], $this->svc->extractThemesFromBundle(['themes' => [[], ['title' => 'x']]]));
+    }
+
+    public function testListBuiltinThemesReadsBundleWhenPresent(): void
+    {
+        $dataDir = $this->tmpRoot . '/module/dist/static/data';
+        mkdir($dataDir, 0755, true);
+        file_put_contents($dataDir . '/bundle.json', json_encode([
+            'themes' => ['themes' => [
+                ['name' => 'base', 'title' => 'Default', 'version' => '2025'],
+                ['name' => 'neo', 'title' => 'Neo'],
+            ]],
+        ]));
+        $themes = $this->svc->listBuiltinThemes();
+        $this->assertCount(2, $themes);
+        $this->assertSame('base', $themes[0]['id']);
+        $this->assertSame('Default', $themes[0]['title']);
+    }
+
+    public function testListBuiltinThemesReturnsEmptyWhenBundleMissing(): void
+    {
+        $this->assertSame([], $this->svc->listBuiltinThemes());
+    }
+
+    public function testListBuiltinThemesReturnsEmptyOnMalformedJson(): void
+    {
+        $dataDir = $this->tmpRoot . '/module/dist/static/data';
+        mkdir($dataDir, 0755, true);
+        file_put_contents($dataDir . '/bundle.json', '{not json');
+        $this->assertSame([], $this->svc->listBuiltinThemes());
+    }
+
+    public function testAllocateUniqueSlugSuffixesAroundBuiltinsAndUploads(): void
+    {
+        $dataDir = $this->tmpRoot . '/module/dist/static/data';
+        mkdir($dataDir, 0755, true);
+        file_put_contents($dataDir . '/bundle.json', json_encode([
+            'themes' => ['themes' => [['name' => 'acme']]],
+        ]));
+        // Bound against a built-in name -> suffix -2.
+        $slug = $this->svc->allocateUniqueSlug('acme');
+        $this->assertSame('acme-2', $slug);
+
+        // After installing 'acme-2', the next collision goes to -3.
+        $zip = $this->makeZip(['config.xml' => $this->configXml('acme-2'), 'style.css' => 'x{}']);
+        $this->svc->installFromZip($zip);
+        $this->assertSame('acme-3', $this->svc->allocateUniqueSlug('acme'));
+        @unlink($zip);
+    }
+
+    public function testNormalizeSlugSanitizesInput(): void
+    {
+        $this->assertSame('a-b-c', StylesService::normalizeSlug('A B C'));
+        $this->assertSame('style', StylesService::normalizeSlug('  '));
+        $this->assertSame('a', StylesService::normalizeSlug('---a---'));
+    }
+
+    public function testIsUnsafeZipEntryDetectsEveryBadShape(): void
+    {
+        foreach (['', '\\a', '/absolute', 'http://x', '../x', 'a/../b'] as $bad) {
+            $this->assertTrue(StylesService::isUnsafeZipEntry($bad), "should reject: $bad");
+        }
+        foreach (['style.css', 'icons/a.png', 'sub/dir/file.css'] as $ok) {
+            $this->assertFalse(StylesService::isUnsafeZipEntry($ok), "should accept: $ok");
+        }
+    }
+
+    public function testIsAllowedFilenameRejectsExtensionlessAndPhp(): void
+    {
+        $this->assertFalse(StylesService::isAllowedFilename('README'));
+        $this->assertFalse(StylesService::isAllowedFilename('evil.php'));
+        $this->assertTrue(StylesService::isAllowedFilename('dir/'));
+        $this->assertTrue(StylesService::isAllowedFilename('style.css'));
+        $this->assertTrue(StylesService::isAllowedFilename('icons/a.svg'));
+    }
+
+    public function testParseConfigXmlRejectsInvalidXml(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        StylesService::parseConfigXml('<<bad xml');
+    }
+
+    public function testParseConfigXmlRequiresName(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        StylesService::parseConfigXml('<?xml version="1.0"?><theme></theme>');
+    }
+
+    public function testValidateZipRejectsOversize(): void
+    {
+        // Make a zip with large-content to exceed the cap via a reflective
+        // tweak of the service's default max.
+        $zip = $this->makeZip([
+            'config.xml' => $this->configXml('big'),
+            'style.css'  => str_repeat('x', 100),
+        ]);
+        // Force max size to 50 bytes via an anonymous subclass.
+        $svc = new class(new Settings(), $this->tmpRoot . '/files', $this->tmpRoot . '/module') extends StylesService {
+            public function getMaxZipSize(): int
+            {
+                return 50;
+            }
+        };
+        $this->expectException(\RuntimeException::class);
+        try {
+            $svc->validateZip($zip);
+        } finally {
+            @unlink($zip);
+        }
+    }
+
+    public function testValidateZipAcceptsSingleRootFolder(): void
+    {
+        $zip = $this->makeZip([
+            'acme/config.xml' => $this->configXml('acme'),
+            'acme/style.css'  => 'body{}',
+        ]);
+        $result = $this->svc->validateZip($zip);
+        $this->assertSame('acme/', $result['prefix']);
+        @unlink($zip);
+    }
+
+    public function testValidateZipRejectsMultipleConfigs(): void
+    {
+        $zip = $this->makeZip([
+            'a/config.xml' => $this->configXml('a'),
+            'b/config.xml' => $this->configXml('b'),
+            'a/style.css'  => 'x{}',
+            'b/style.css'  => 'y{}',
+        ]);
+        $this->expectException(\RuntimeException::class);
+        try {
+            $this->svc->validateZip($zip);
+        } finally {
+            @unlink($zip);
+        }
+    }
+
+    public function testInstallFromFolderedZipExtractsOnlyFiles(): void
+    {
+        $zip = $this->makeZip([
+            'acme/config.xml' => $this->configXml('acme'),
+            'acme/style.css'  => 'body{}',
+            'acme/img/bg.png' => 'fake-png',
+        ]);
+        $entry = $this->svc->installFromZip($zip);
+        $this->assertFileExists($this->svc->getStorageDir() . '/acme/style.css');
+        $this->assertFileExists($this->svc->getStorageDir() . '/acme/img/bg.png');
+        $this->assertFileDoesNotExist($this->svc->getStorageDir() . '/acme/acme/style.css');
+        @unlink($zip);
+    }
+
+    public function testInstallRejectsWhenNoCssIsPresent(): void
+    {
+        $zip = $this->makeZip([
+            'config.xml' => $this->configXml('nocss'),
+            'info.md'    => 'no css here',
+        ]);
+        $this->expectException(\RuntimeException::class);
+        try {
+            $this->svc->installFromZip($zip);
+        } finally {
+            @unlink($zip);
+        }
+    }
+
+    public function testBuildOverrideHonorsBaseUrl(): void
+    {
+        $zip = $this->makeZip([
+            'config.xml' => $this->configXml('acme'),
+            'style.css'  => 'x{}',
+        ]);
+        $this->svc->installFromZip($zip);
+        $override = $this->svc->buildThemeRegistryOverride('https://host');
+        $this->assertSame('https://host/exelearning/styles/acme', $override['uploaded'][0]['url']);
+
+        $override2 = $this->svc->buildThemeRegistryOverride('');
+        $this->assertSame('/exelearning/styles/acme', $override2['uploaded'][0]['url']);
+        @unlink($zip);
+    }
+
+    public function testGetStorageAndStyleDirResolveCorrectly(): void
+    {
+        $this->assertStringEndsWith('/exelearning-styles', $this->svc->getStorageDir());
+        $this->assertStringEndsWith('/exelearning-styles/acme', $this->svc->getStyleDir('acme'));
+        $this->assertStringEndsWith('/exelearning-styles/style', $this->svc->getStyleDir(''));
+    }
+
+    public function testRecursiveDeleteHandlesMissingPath(): void
+    {
+        // Should not throw.
+        StylesService::recursiveDelete($this->tmpRoot . '/does-not-exist');
+        $this->assertTrue(true);
     }
 
     // ---------- helpers ----------
