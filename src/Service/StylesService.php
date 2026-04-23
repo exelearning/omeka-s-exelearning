@@ -236,6 +236,7 @@ class StylesService
             $cssFiles = isset($meta['css_files']) && is_array($meta['css_files'])
                 ? array_values(array_map('strval', $meta['css_files']))
                 : ['style.css'];
+            $files = $this->listUploadedFiles((string) $slug);
             $uploaded[] = [
                 'id' => (string) $slug,
                 'name' => (string) $slug,
@@ -245,9 +246,10 @@ class StylesService
                 'version' => (string) ($meta['version'] ?? ''),
                 'author' => (string) ($meta['author'] ?? ''),
                 'license' => (string) ($meta['license'] ?? ''),
-                'type' => 'uploaded',
+                'type' => 'admin',
                 'url' => $prefix . $this->getStyleUrlPath((string) $slug),
                 'cssFiles' => $cssFiles,
+                'files' => $files,
                 'downloadable' => '0',
                 'valid' => true,
             ];
@@ -581,6 +583,46 @@ class StylesService
             return false;
         }
         return in_array($ext, self::ALLOWED_EXTENSIONS, true);
+    }
+
+    /**
+     * Walk an uploaded style's extracted directory and return every file
+     * inside it as a list of forward-slash relative paths. The embedded
+     * editor's ResourceFetcher consumes this manifest via
+     * themeRegistryOverride.uploaded[].files so admin-approved styles can
+     * be fetched file-by-file instead of expecting a zip bundle under
+     * /bundles/themes/<name>.zip.
+     *
+     * @return string[]
+     */
+    public function listUploadedFiles(string $slug): array
+    {
+        $slug = self::normalizeSlug($slug);
+        $dir = $this->getStorageDir() . '/' . $slug;
+        if (!is_dir($dir)) {
+            return [];
+        }
+        $baseLen = strlen(rtrim($dir, '/') . '/');
+        $out = [];
+        try {
+            $iter = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
+                \RecursiveIteratorIterator::LEAVES_ONLY
+            );
+            foreach ($iter as $fileInfo) {
+                if (!$fileInfo->isFile()) {
+                    continue;
+                }
+                $absolute = (string) $fileInfo->getPathname();
+                $relative = substr($absolute, $baseLen);
+                $relative = str_replace(DIRECTORY_SEPARATOR, '/', $relative);
+                $out[] = $relative;
+            }
+        } catch (\Exception $e) {
+            return [];
+        }
+        sort($out);
+        return $out;
     }
 
     public static function normalizeSlug(string $slug): string
