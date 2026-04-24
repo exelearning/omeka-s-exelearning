@@ -5,6 +5,7 @@ namespace ExeLearning\Controller;
 
 use ExeLearning\Service\ElpFileService;
 use ExeLearning\Service\StaticEditorInstaller;
+use ExeLearning\Service\StylesService;
 use Laminas\Mvc\Controller\AbstractActionController;
 use Laminas\View\Model\ViewModel;
 
@@ -16,12 +17,18 @@ class EditorController extends AbstractActionController
     /** @var ElpFileService */
     protected $elpService;
 
+    /** @var StylesService|null */
+    protected $stylesService;
+
     /**
-     * @param ElpFileService $elpService
+     * @param ElpFileService    $elpService
+     * @param StylesService|null $stylesService Optional — when absent the
+     *        editor bootstrap omits the themeRegistryOverride payload.
      */
-    public function __construct(ElpFileService $elpService)
+    public function __construct(ElpFileService $elpService, ?StylesService $stylesService = null)
     {
         $this->elpService = $elpService;
+        $this->stylesService = $stylesService;
     }
 
     /**
@@ -109,10 +116,24 @@ class EditorController extends AbstractActionController
             ],
         ];
 
+        // Build the approved style registry the editor will consume via
+        // window.eXeLearning.config.themeRegistryOverride (see core PR
+        // exelearning/exelearning#1722). Absolute URLs so the editor
+        // can fetch style assets from the public serve route.
+        $themeRegistryOverride = $this->stylesService
+            ? $this->stylesService->buildThemeRegistryOverride($serverUrl . $basePath)
+            : [
+                'disabledBuiltins' => [],
+                'uploaded' => [],
+                'blockImportInstall' => false,
+                'fallbackTheme' => 'base',
+            ];
+
         $view = new ViewModel([
             'media' => $media,
             'config' => $config,
             'editorBaseUrl' => $config['editorBaseUrl'],
+            'themeRegistryOverride' => $themeRegistryOverride,
         ]);
 
         $view->setTemplate('exelearning/editor-bootstrap');

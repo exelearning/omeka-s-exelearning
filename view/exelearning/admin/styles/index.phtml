@@ -1,0 +1,146 @@
+<?php
+/**
+ * Admin page: eXeLearning style management.
+ *
+ * @var \Laminas\View\Renderer\PhpRenderer $this
+ * @var \ExeLearning\Form\StylesUploadForm $form
+ * @var array $builtins
+ * @var array $uploaded
+ * @var array $registry
+ * @var bool  $blockImport
+ * @var int   $maxZipSize
+ */
+
+$escape = $this->plugin('escapeHtml');
+$escapeAttr = $this->plugin('escapeHtmlAttr');
+$translate = $this->plugin('translate');
+$url = $this->plugin('url');
+
+$this->htmlElement('body')->appendAttribute('class', 'exelearning-styles');
+$this->headLink()->appendStylesheet($this->assetUrl('css/exelearning.css', 'ExeLearning'));
+
+$this->headTitle($translate('eXeLearning styles'));
+
+$toggleBuiltin = $url('admin/exelearning-styles/toggle-builtin');
+$toggleUploaded = $url('admin/exelearning-styles/toggle-uploaded');
+$delete = $url('admin/exelearning-styles/delete');
+$toggleBlockImport = $url('admin/exelearning-styles/toggle-block-import');
+$sizeHint = function_exists('size_format') ? size_format($maxZipSize) : ($maxZipSize . ' bytes');
+?>
+
+<?= $this->pageTitle($translate('eXeLearning styles'), 1) ?>
+
+<p><?= $escape($translate('Upload eXeLearning style packages and control which styles the embedded editor exposes. Disabled built-ins are hidden from the editor selector; uploaded styles can be enabled, disabled, or deleted at any time.')) ?></p>
+
+<h3><?= $escape($translate('Import policy')) ?></h3>
+<form method="post" action="<?= $escapeAttr($toggleBlockImport) ?>" style="margin-bottom: 1em;">
+    <?= $this->formCollection(new \Laminas\Form\Form(), false) // inline CSRF via Omeka global layout ?>
+    <input type="hidden" name="enabled" value="<?= $blockImport ? '0' : '1' ?>">
+    <label>
+        <strong><?= $escape($translate('Block user-imported styles')) ?></strong>
+    </label>
+    <p class="description" style="margin: 0.25em 0 0.5em 0;">
+        <?= $escape($translate('When enabled, the embedded editor hides the "User styles" tab and silently refuses to install a style bundled inside an imported .elpx project. This mirrors the eXeLearning ONLINE_THEMES_INSTALL=false behavior.')) ?>
+    </p>
+    <button type="submit" class="button">
+        <?= $blockImport
+            ? $escape($translate('Currently blocking — click to allow imports'))
+            : $escape($translate('Currently allowing — click to block imports')) ?>
+    </button>
+</form>
+
+<h3><?= $escape($translate('Upload a new style')) ?></h3>
+<?php $form->prepare(); ?>
+<?= $this->form()->openTag($form) ?>
+    <?= $this->formRow($form->get('styles_zip')) ?>
+    <?= $this->formRow($form->get('csrf')) ?>
+    <?= $this->formRow($form->get('submit')) ?>
+<?= $this->form()->closeTag() ?>
+<p class="description">
+    <?= sprintf(
+        $escape($translate('Maximum file size: %s. Only .zip packages containing a valid config.xml are accepted.')),
+        $escape($sizeHint)
+    ) ?>
+</p>
+
+<h3><?= $escape($translate('Uploaded styles')) ?></h3>
+<?php if (empty($uploaded)): ?>
+    <p><em><?= $escape($translate('No uploaded styles yet.')) ?></em></p>
+<?php else: ?>
+<table class="tablesaw">
+    <thead>
+        <tr>
+            <th><?= $escape($translate('Title')) ?></th>
+            <th><?= $escape($translate('Id')) ?></th>
+            <th><?= $escape($translate('Version')) ?></th>
+            <th><?= $escape($translate('Installed')) ?></th>
+            <th><?= $escape($translate('Enabled')) ?></th>
+            <th><?= $escape($translate('Actions')) ?></th>
+        </tr>
+    </thead>
+    <tbody>
+    <?php foreach ($uploaded as $style): ?>
+        <tr>
+            <td><?= $escape($style['title'] ?? $style['id']) ?></td>
+            <td><code><?= $escape($style['id']) ?></code></td>
+            <td><?= $escape($style['version'] ?? '') ?></td>
+            <td><?= $escape($style['installed_at'] ?? '') ?></td>
+            <td>
+                <form method="post" action="<?= $escapeAttr($toggleUploaded) ?>" style="display:inline;">
+                    <input type="hidden" name="slug" value="<?= $escapeAttr($style['id']) ?>">
+                    <input type="hidden" name="enabled" value="<?= empty($style['enabled']) ? '1' : '0' ?>">
+                    <button type="submit" class="button">
+                        <?= empty($style['enabled']) ? $escape($translate('Enable')) : $escape($translate('Disable')) ?>
+                    </button>
+                </form>
+            </td>
+            <td>
+                <form method="post" action="<?= $escapeAttr($delete) ?>" style="display:inline;"
+                      onsubmit="return confirm('<?= $escape($translate('Delete this style? This cannot be undone.')) ?>');">
+                    <input type="hidden" name="slug" value="<?= $escapeAttr($style['id']) ?>">
+                    <button type="submit" class="button red"><?= $escape($translate('Delete')) ?></button>
+                </form>
+            </td>
+        </tr>
+    <?php endforeach; ?>
+    </tbody>
+</table>
+<?php endif; ?>
+
+<h3><?= $escape($translate('Built-in styles')) ?></h3>
+<?php if (empty($builtins)): ?>
+    <p><em><?= $escape($translate('Built-in styles are not available because the embedded editor is not installed.')) ?></em></p>
+<?php else: ?>
+<table class="tablesaw">
+    <thead>
+        <tr>
+            <th><?= $escape($translate('Title')) ?></th>
+            <th><?= $escape($translate('Id')) ?></th>
+            <th><?= $escape($translate('Version')) ?></th>
+            <th><?= $escape($translate('Enabled')) ?></th>
+        </tr>
+    </thead>
+    <tbody>
+    <?php
+    $disabled = $registry['disabled_builtins'] ?? [];
+    foreach ($builtins as $style):
+        $isDisabled = in_array($style['id'], $disabled, true);
+    ?>
+        <tr>
+            <td><?= $escape($style['title']) ?></td>
+            <td><code><?= $escape($style['id']) ?></code></td>
+            <td><?= $escape($style['version']) ?></td>
+            <td>
+                <form method="post" action="<?= $escapeAttr($toggleBuiltin) ?>" style="display:inline;">
+                    <input type="hidden" name="id" value="<?= $escapeAttr($style['id']) ?>">
+                    <input type="hidden" name="enabled" value="<?= $isDisabled ? '1' : '0' ?>">
+                    <button type="submit" class="button">
+                        <?= $isDisabled ? $escape($translate('Enable')) : $escape($translate('Disable')) ?>
+                    </button>
+                </form>
+            </td>
+        </tr>
+    <?php endforeach; ?>
+    </tbody>
+</table>
+<?php endif; ?>

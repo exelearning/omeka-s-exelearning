@@ -706,7 +706,36 @@ JS
 
         $formHtml = $renderer->formCollection($form, false);
 
-        return $this->renderEditorStatusSection($renderer, $settings) . $formHtml;
+        return $this->renderEditorStatusSection($renderer, $settings)
+            . $this->renderStylesSection($renderer)
+            . $formHtml;
+    }
+
+    /**
+     * Render a short section pointing to the dedicated Styles admin page.
+     */
+    protected function renderStylesSection(PhpRenderer $renderer): string
+    {
+        $translate = function ($text) use ($renderer) {
+            return $renderer->translate($text);
+        };
+        $stylesUrl = $renderer->url('admin/exelearning-styles');
+        $html = '<fieldset id="exelearning-styles-link">';
+        $html .= '<legend>' . $renderer->escapeHtml($translate('Styles')) . '</legend>'; // @translate
+        $html .= '<div class="field"><div class="field-meta">';
+        $html .= '<label>' . $renderer->escapeHtml($translate('Style management')) . '</label>'; // @translate
+        $html .= '</div><div class="inputs">';
+        $html .= '<a class="button" href="' . $renderer->escapeHtmlAttr($stylesUrl) . '">';
+        $html .= $renderer->escapeHtml($translate('Open styles page'));  // @translate
+        $html .= '</a>';
+        $html .= '<p class="explanation">';
+        $html .= $renderer->escapeHtml($translate( // @translate
+            'Upload eXeLearning style packages, enable/disable built-in styles, '
+            . 'and control the "Block user-imported styles" policy from a dedicated page.'
+        ));
+        $html .= '</p>';
+        $html .= '</div></div></fieldset>';
+        return $html;
     }
 
     /**
