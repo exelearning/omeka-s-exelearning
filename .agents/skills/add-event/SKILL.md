@@ -1,70 +1,18 @@
 ---
 name: add-event
-description: Attach a new Omeka S event listener in Module.php. Invoke with a description, e.g. /add-event log media updates
+description: "Attach or change an Omeka API or view listener in ExeLearning Module.php."
 ---
 
-Attach a new event listener for: $ARGUMENTS
+# Add an event listener
 
-## Steps
-
-### 1. Register in `Module::attachListeners()`
-
-```php
-public function attachListeners(SharedEventManagerInterface $sharedEventManager)
-{
-    // ... existing listeners ...
-
-    $sharedEventManager->attach(
-        'Omeka\Api\Adapter\MediaAdapter',  // identifier (see table below)
-        'api.update.post',                  // event name
-        [$this, 'handleMyEvent']
-    );
-}
-```
-
-### 2. Add the handler method on `Module`
-
-```php
-public function handleMyEvent(Event $event): void
-{
-    $services = $this->getServiceLocator();
-    $logger = $services->get('Omeka\Logger');
-
-    /** @var \Omeka\Api\Request $request */
-    $request = $event->getParam('request');
-    /** @var \Omeka\Entity\Media $entity */
-    $entity = $event->getParam('entity');   // available on api.*.post events
-    /** @var \Omeka\Api\Response $response */
-    $response = $event->getParam('response'); // available on api.*.post events
-
-    // your logic here
-}
-```
-
-### Common event identifiers
-
-| Identifier | Fires for |
-|---|---|
-| `Omeka\Api\Adapter\MediaAdapter` | Media CRUD operations |
-| `Omeka\Api\Adapter\ItemAdapter` | Item CRUD operations |
-| `Omeka\Controller\Admin\Media` | Admin media pages |
-| `Omeka\Controller\Admin\Item` | Admin item pages |
-| `Omeka\Controller\Site\Item` | Public item pages |
-| `*` | All controllers (use sparingly) |
-
-### Common event names
-
-| Event | When | Key params |
-|---|---|---|
-| `api.hydrate.post` | After entity hydration from request | `request`, `entity` |
-| `api.create.post` | After entity created | `request`, `entity`, `response` |
-| `api.update.post` | After entity updated | `request`, `entity`, `response` |
-| `api.delete.pre` | Before entity deleted | `request`, `entity` |
-| `view.show.after` | After show view rendered | view renderer as target |
-| `view.layout` | Every page layout | view renderer as target |
-
-### Notes
-- `$event->getTarget()` returns the view renderer on `view.*` events and the adapter on `api.*` events.
-- Get the view in `view.*` handlers: `$view = $event->getTarget();`
-- Always check the entity type before acting: `if (!$this->isExeLearningFile($media)) return;`
-- Services available via `$this->getServiceLocator()` inside `Module` methods.
+1. Inspect `Module::attachListeners()` and the closest handler. Consult `omeka-s-api-and-adapters`
+   and the supported core event emitter for the precise identifier and payload.
+2. Register only the required identifier/event pair. A wildcard layout listener runs for unrelated media;
+   return early before loading services if the request/resource is out of scope.
+3. Distinguish payloads: hydrate events supply an `entity`; API create/update post events supply a
+   `response` whose content is the entity before representation conversion. Do not assume every
+   `api.*.post` event has an `entity` parameter. View events expose the renderer as their target.
+4. Choose timing deliberately: hydrate precedes flush; create post has a persisted identity; deletion
+   cleanup must capture the data it needs before it disappears. Preserve failure handling.
+5. Update `ModuleTest::testAttachListenersRegistersEveryOmekaHook` and add behavior tests using the
+   real event payload shape. Run `make lint` and `make test-coverage`.

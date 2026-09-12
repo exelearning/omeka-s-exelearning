@@ -1,10 +1,12 @@
 ---
 name: omeka-s-api-and-adapters
 description: "Use when working with Omeka S's API layer from this module: the api.* and rep.resource.json events, entity-versus-representation payloads, media data storage, and the module's own /api/exelearning endpoints."
-compatibility: "Omeka S >= 3.0. Event identifiers and payload keys follow Omeka S 3.x."
 ---
 
 # Omeka S API and Adapters
+
+Compatibility: Omeka S >= 3.0. Event identifiers and payload keys follow Omeka S 3.x.
+
 
 ## When to use
 
@@ -104,8 +106,8 @@ if (!$acl->userIsAllowed('Omeka\Entity\Media', 'update')) {
 ```
 
 The token is accepted from the `csrf` POST field, the `X-CSRF-Token` header, or
-the `csrf` query parameter; an absent token is a rejection. CSRF proves origin,
-the ACL proves authorisation — neither substitutes for the other.
+the `csrf` query parameter; an absent token is a rejection. CSRF validates a session-bound request token,
+the ACL checks authorisation — neither substitutes for the other.
 
 ## Verification
 

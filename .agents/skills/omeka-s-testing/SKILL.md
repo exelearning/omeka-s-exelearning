@@ -1,10 +1,12 @@
 ---
 name: omeka-s-testing
 description: "Use when writing or fixing tests for this Omeka S module: the test/Stubs harness, when to add a stub versus a double, how to test controllers and Module event handlers without an Omeka runtime, and what the coverage gate measures."
-compatibility: "PHPUnit 9.6, PHP >= 7.4. Runs with no database, no web server and no Omeka installation."
 ---
 
 # Testing This Omeka S Module
+
+Compatibility: PHPUnit 9.6, PHP >= 7.4. Runs with no database, no web server and no Omeka installation.
+
 
 ## When to use
 
