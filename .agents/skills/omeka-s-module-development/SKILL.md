@@ -26,7 +26,7 @@ src/Service/                ElpFileService, StylesService, EditorBundle, Downloa
 src/Media/FileRenderer/     ExeLearningRenderer (registered as `exelearning_renderer`)
 src/Form/                   ConfigForm, StylesUploadForm
 view/                       .phtml partials, resolved via template_path_stack
-data/exelearning/           extracted ELPX content, one directory per SHA1
+configured files/exelearning/ extracted ELPX content; resolve through the service factory
 dist/static/                the bundled editor -- a release artifact, see ADR-28-01
 ```
 
