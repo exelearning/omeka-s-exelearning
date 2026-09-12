@@ -1,10 +1,12 @@
 ---
 name: omeka-s-module-development
 description: "Use when working on this Omeka S module's structure: Module.php lifecycle (install/upgrade/uninstall), config/module.config.php wiring, services and factories, the config form, ACL and CSRF boundaries, settings, and where files live on disk."
-compatibility: "Omeka S >= 3.0 on PHP >= 7.4 (composer.json pins the 7.4 platform; CI runs 8.3). Laminas MVC 3 / ServiceManager 3."
 ---
 
 # Omeka S Module Development
+
+Compatibility: Omeka S >= 3.0 on PHP >= 7.4 (composer.json pins the 7.4 platform; CI runs 8.3). Laminas MVC 3 / ServiceManager 3.
+
 
 ## When to use
 
@@ -24,7 +26,7 @@ src/Service/                ElpFileService, StylesService, EditorBundle, Downloa
 src/Media/FileRenderer/     ExeLearningRenderer (registered as `exelearning_renderer`)
 src/Form/                   ConfigForm, StylesUploadForm
 view/                       .phtml partials, resolved via template_path_stack
-data/exelearning/           extracted ELPX content, one directory per SHA1
+configured files/exelearning/ extracted ELPX content; resolve through the service factory
 dist/static/                the bundled editor -- a release artifact, see ADR-28-01
 ```
 

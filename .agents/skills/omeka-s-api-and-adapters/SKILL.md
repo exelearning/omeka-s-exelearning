@@ -1,10 +1,12 @@
 ---
 name: omeka-s-api-and-adapters
 description: "Use when working with Omeka S's API layer from this module: the api.* and rep.resource.json events, entity-versus-representation payloads, media data storage, and the module's own /api/exelearning endpoints."
-compatibility: "Omeka S >= 3.0. Event identifiers and payload keys follow Omeka S 3.x."
 ---
 
 # Omeka S API and Adapters
+
+Compatibility: Omeka S >= 3.0. Event identifiers and payload keys follow Omeka S 3.x.
+
 
 ## When to use
 
@@ -19,7 +21,7 @@ This is the single most common source of bugs in Omeka event code.
 | --- | --- | --- | --- |
 | `api.hydrate.post` | `entity` | Doctrine **entity** | `getFilename()`, `getData()`, `setRenderer()` |
 | `api.create.post` | `response` | wraps an **entity** | `getContent()->getId()` |
-| `api.delete.pre` | `entity` | Doctrine **entity** | `getId()`, `getFilename()`, `getData()` |
+| `api.delete.pre` | `request` | API **request** in core initialization | `getId()`; do not assume an entity parameter |
 | `rep.resource.json` | event *target* | **representation** | `filename()`, `id()`, `mediaData()` |
 | `view.show.after` | view target | **representation** via `$view->resource` / `$view->item` | idem |
 
@@ -50,8 +52,10 @@ which asserts the exact registration list in order.
 Pick the event by what you need: `api.hydrate.post` to influence what gets
 persisted (it runs before the flush), `api.create.post` for work that needs a
 persisted id, `api.delete.pre` for cleanup that needs the row to still exist.
-Cleaning up in `api.delete.post` is too late — the data you need to find the
-files is gone.
+Capture deletion data before it disappears, but verify the emitter: core API-pre
+events supply a request, not an entity. The current `handleMediaDelete()` expects
+an entity and returns if absent; do not copy that assumption from its test doubles
+into new handlers. Validate the actual supported-core event when changing cleanup.
 
 ## Media data
 
@@ -104,8 +108,8 @@ if (!$acl->userIsAllowed('Omeka\Entity\Media', 'update')) {
 ```
 
 The token is accepted from the `csrf` POST field, the `X-CSRF-Token` header, or
-the `csrf` query parameter; an absent token is a rejection. CSRF proves origin,
-the ACL proves authorisation — neither substitutes for the other.
+the `csrf` query parameter; an absent token is a rejection. CSRF validates a session-bound request token,
+the ACL checks authorisation — neither substitutes for the other.
 
 ## Verification
 

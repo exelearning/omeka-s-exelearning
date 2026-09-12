@@ -1,85 +1,19 @@
 ---
 name: add-route
-description: Add a new route and controller action to this Omeka S module. Invoke with a short description, e.g. /add-route admin export endpoint
+description: "Add or change an ExeLearning route, controller action, or endpoint URL."
 ---
 
-Add a new route and controller action for: $ARGUMENTS
+# Add a route
 
-## Steps
-
-### 1. Add the route in `config/module.config.php`
-
-**Public/API route** (standalone):
-```php
-'router' => [
-    'routes' => [
-        'exelearning-myroute' => [
-            'type' => \Laminas\Router\Http\Segment::class,
-            'options' => [
-                'route' => '/exelearning/my-route[/:id]',
-                'constraints' => ['id' => '\d+'],
-                'defaults' => [
-                    '__NAMESPACE__' => 'ExeLearning\Controller',
-                    'controller' => 'MyController',
-                    'action' => 'myAction',
-                ],
-            ],
-        ],
-    ],
-],
-```
-
-**Admin child route** (under `/admin`):
-```php
-'admin' => [
-    'child_routes' => [
-        'exelearning-myroute' => [
-            'type' => \Laminas\Router\Http\Segment::class,
-            'options' => [
-                'route' => '/exelearning/my-route[/:id]',
-                'constraints' => ['id' => '\d+'],
-                'defaults' => [
-                    '__NAMESPACE__' => 'ExeLearning\Controller',
-                    'controller' => 'MyController',
-                    'action' => 'myAction',
-                ],
-            ],
-        ],
-    ],
-],
-```
-
-Use `Literal` for fixed paths, `Segment` for paths with `:param`, `Regex` for paths needing slashes inside a segment (like `exelearning-content`).
-
-### 2. Add the action to the controller
-
-In `src/Controller/MyController.php`:
-```php
-public function myActionAction()
-{
-    // Check ACL if needed:
-    $acl = $this->getServiceLocator()->get('Omeka\Acl');
-    if (!$acl->userIsAllowed('Omeka\Entity\Media', 'read')) {
-        return $this->redirect()->toRoute('login');
-    }
-
-    $id = $this->params('id');
-    // ...
-    return new \Laminas\View\Model\ViewModel(['data' => $data]);
-}
-```
-
-For JSON responses: `return new \Laminas\View\Model\JsonModel(['key' => 'value']);`
-
-### 3. Add the view template (if not JSON)
-
-Create `view/exe-learning/my-controller/my-action.phtml`.
-
-### 4. Generate the URL in views/JS
-
-PHP: `$this->url('exelearning-myroute', ['id' => $id])`
-JS: Use `$request->getBasePath()` prefix — the module supports playground prefix environments.
-
-### 5. Write a unit test
-
-Add a controller test in `test/ExeLearningTest/Controller/` following `ApiControllerTest.php` as the example.
+1. Read the nearest existing route and its controller/factory in `config/module.config.php`.
+   Keep admin routes under `admin.child_routes`; custom `/api/exelearning` routes are plain MVC routes,
+   not automatically authenticated Omeka REST adapters.
+2. Register the controller, factory and alias consistently. Use the actual action-name convention
+   from that controller; validate IDs and all request inputs.
+3. Keep CSRF and ACL checks for mutations. Test denied direct requests as well as successful UI use;
+   neither navigation visibility nor a route prefix authorizes a caller.
+4. Add a view only for HTML responses. Reuse current JSON/API-problem response patterns otherwise.
+5. Generate route URLs through existing helpers and `Module::extractBasePath()` where needed.
+   Do not use `$request->getBasePath()` for scoped installations.
+6. Add a controller test under `test/ExeLearningTest/Controller/`, and run `make lint` and
+   `make test-coverage`. Check subpath URLs when changing client-facing routes.
