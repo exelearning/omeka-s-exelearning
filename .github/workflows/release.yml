@@ -5,7 +5,7 @@ name: Release
 # module version comes from the pushed tag (or the `release_tag` input); the
 # editor is built from the tag recorded in `.editor-version` unless the
 # dispatch inputs override it. This is what lets a module-only fix ship as
-# `v4.0.6-rc.1` on top of editor v4.0.5 before editor v4.0.6 exists.
+# `v4.0.6-rc.1` on top of editor v4.0.5 before editor v4.0.6 exists (ADR-40-01).
 
 on:
   push:

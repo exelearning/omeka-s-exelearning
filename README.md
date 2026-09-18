@@ -119,7 +119,8 @@ pre-release, so "latest" keeps pointing at the last stable version. Omeka S
 orders `4.0.5 < 4.0.6-rc.1 < 4.0.6`, so sites upgrade in sequence. Valid module
 versions are `X.Y.Z` and `X.Y.Z-(alpha|beta|rc).N` only: Omeka S parses them
 with Composer's semver library, which rejects other labels, and `make package`
-refuses them. Run the workflow manually to override the editor ref.
+refuses them. Run the workflow manually to override the editor ref. See
+[ADR-40-01](docs/architecture/adr/ADR-40-01-decouple-module-version-from-bundled-editor-version.md).
 
 ### Architecture documentation
 

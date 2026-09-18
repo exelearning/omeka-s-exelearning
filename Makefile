@@ -256,9 +256,9 @@ package:
 	@# Omeka S orders module versions with Composer's semver parser, which only
 	@# accepts alpha/beta/rc pre-release labels; a label it cannot parse (such as
 	@# "prerelease" or "hotfix") throws on every admin request. Refuse it here,
-	@# before anything is written.
+	@# before anything is written. See ADR-40-01.
 	@if ! echo "$(VERSION)" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.?[0-9]+)?$$'; then \
-		echo "Error: VERSION '$(VERSION)' must be X.Y.Z or X.Y.Z-(alpha|beta|rc).N (Omeka S cannot parse other labels)." >&2; \
+		echo "Error: VERSION '$(VERSION)' must be X.Y.Z or X.Y.Z-(alpha|beta|rc).N (Omeka S cannot parse other labels, see ADR-40-01)." >&2; \
 		exit 1; \
 	fi
 	@# The embedded editor is a release artifact (ADR-28-01): never produce a
