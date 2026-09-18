@@ -668,11 +668,13 @@ class ExeLearningRendererTest extends TestCase
 
         $result = $renderer->render($view, $media);
 
-        // allow-same-origin is deliberate and load-bearing: ContentController
-        // serves the package under `default-src 'self'`, which an opaque origin
-        // can never match, so without it every asset inside the package is
-        // blocked. The sandbox is not the security boundary here -- the ZIP
-        // validation and the proxy's response headers are.
+        // Pinned so that changing it means editing a test that explains why.
+        // This value is NOT an isolation boundary: allow-same-origin with
+        // allow-scripts lets package JavaScript act as the Omeka origin. It is
+        // preserved only so this change alters renderer registration without
+        // also altering the security posture, and because dropping the flag
+        // alone breaks the viewer without hardening anything. PR #21 replaces
+        // this with an opaque-origin viewer; see ADR-39-02.
         $this->assertStringContainsString(
             'sandbox="allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox"',
             $result

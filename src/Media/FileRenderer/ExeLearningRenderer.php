@@ -138,15 +138,22 @@ class ExeLearningRenderer implements FileRendererInterface, MediaRendererInterfa
         // Iframe — src is set by inline JS so the playground SW scope prefix
         // from window.location is correctly prepended to the content path.
         //
-        // allow-same-origin is deliberate. The package is proxied same-origin by
-        // ContentController, which serves it under `default-src 'self'`; an
-        // opaque origin cannot match 'self', so without this flag every bundled
-        // stylesheet, script and image inside the package is blocked, and the
-        // php-wasm playground's service worker (which only intercepts
-        // same-origin documents) stops serving the content at all. The trade-off
-        // is that package JS runs in the Omeka origin, so the sandbox is not the
-        // boundary here — the ZIP validation in ZipSafety and the proxy's CSP,
-        // Referrer-Policy and Permissions-Policy headers are.
+        // TEMPORARY, and not a security boundary. `allow-same-origin` together
+        // with `allow-scripts` on content served from the Omeka origin means
+        // package JavaScript runs *as* that origin: it can reach the session
+        // cookie and issue same-origin requests as whoever is viewing. ZipSafety
+        // guards what may be extracted and the content proxy's CSP is
+        // defence-in-depth, but neither contains this.
+        //
+        // The value is kept because it is what every executing code path
+        // emitted before the renderer became reachable, so this change alters
+        // registration without also altering the security posture, and because
+        // dropping the flag alone does not harden anything — under
+        // `default-src 'self'` an opaque origin cannot load the package's own
+        // assets, so the viewer would simply break.
+        //
+        // PR #21 (feature/secure-iframe-sandbox) replaces this with an
+        // opaque-origin viewer and owns the fix. See ADR-39-02.
         $html .= '<iframe ';
         $html .= 'id="' . $iframeId . '" ';
         $html .= 'data-exe-content-path="' . $view->escapeHtmlAttr($contentPath) . '" ';

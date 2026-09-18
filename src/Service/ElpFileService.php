@@ -44,8 +44,8 @@ class ElpFileService
     /**
      * @param ApiManager $api
      * @param EntityManager $entityManager
-     * @param string $basePath Path to module's data/exelearning directory
-     * @param string $filesPath Path to Omeka's files directory
+     * @param string $basePath Extraction root, <files>/exelearning
+     * @param string $filesPath Omeka's files directory, from Service\FilesPath
      * @param Logger|null $logger
      * @param object|null $tempFileFactory Omeka\File\TempFileFactory (optional;
      *                                     required for thumbnail generation)

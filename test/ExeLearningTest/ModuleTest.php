@@ -14,6 +14,8 @@ use ExeLearningTest\Doubles\FakeElpFileService;
 use ExeLearningTest\Doubles\FakeHttpRequest;
 use ExeLearningTest\Doubles\FakeItem;
 use ExeLearningTest\Doubles\FakeMediaEntity;
+use ExeLearningTest\Doubles\FakeResourcePageBlockLayoutManager;
+use ExeLearningTest\Doubles\FakeThemeManager;
 use ExeLearningTest\Doubles\FakeSourceOnlyEntity;
 use ExeLearningTest\Doubles\RecordingSettings;
 use ExeLearningTest\Doubles\RecordingSharedEventManager;
@@ -185,6 +187,119 @@ class ModuleTest extends TestCase
 
         $this->assertNull($settings->get('media_type_whitelist'));
         $this->assertNull($settings->get('extension_whitelist'));
+    }
+
+    // -------------------------------------------- upgrade from an old release
+
+    public function testUpgradeWithdrawsTheLegacyOctetStreamUploadType(): void
+    {
+        // Releases up to 4.0.5 added application/octet-stream to the
+        // installation-wide whitelist and never took it back, so narrowing
+        // install() alone would only ever reach fresh installations.
+        $settings = new Settings();
+        $settings->set('media_type_whitelist', [
+            'image/png',
+            'application/pdf',
+            'application/zip',
+            'application/x-zip-compressed',
+            'application/octet-stream',
+        ]);
+        $services = new TestServiceLocator(['Omeka\Settings' => $settings]);
+        $module = new TestableModule($services);
+
+        $module->upgrade('4.0.5', '4.1.0', $services);
+
+        $mediaTypes = $settings->get('media_type_whitelist');
+        $this->assertNotContains('application/octet-stream', $mediaTypes);
+        $this->assertContains('image/png', $mediaTypes, 'unrelated entries must survive');
+        $this->assertContains('application/pdf', $mediaTypes, 'unrelated entries must survive');
+        $this->assertContains('application/zip', $mediaTypes, '.elpx still needs ZIP');
+        $this->assertContains('application/x-zip-compressed', $mediaTypes);
+        // Omeka serialises the list as a JSON array; a gapped key list would
+        // become a JSON object instead.
+        $this->assertSame(range(0, count($mediaTypes) - 1), array_keys($mediaTypes));
+    }
+
+    public function testUpgradeLeavesSiteWideZipUploadsAlone(): void
+    {
+        // Withdrawing the renderer aliases is what stops this module claiming
+        // ordinary ZIP files. Removing zip from the upload whitelist as well
+        // would break ZIP uploads for the rest of the installation.
+        $settings = new Settings();
+        $settings->set('media_type_whitelist', ['application/zip', 'application/octet-stream']);
+        $settings->set('extension_whitelist', ['png', 'zip', 'elpx', 'odt']);
+        $services = new TestServiceLocator(['Omeka\Settings' => $settings]);
+        $module = new TestableModule($services);
+
+        $module->upgrade('4.0.5', '4.1.0', $services);
+
+        $this->assertSame(
+            ['png', 'zip', 'elpx', 'odt'],
+            $settings->get('extension_whitelist'),
+            'the extension whitelist is not this upgrade\'s business'
+        );
+        $this->assertContains('application/zip', $settings->get('media_type_whitelist'));
+    }
+
+    public function testUpgradeLeavesAnIntentionallyEmptyWhitelistEmpty(): void
+    {
+        // Omeka's file validator reads an empty whitelist as "allow nothing".
+        $settings = new Settings();
+        $settings->set('media_type_whitelist', []);
+        $services = new TestServiceLocator(['Omeka\Settings' => $settings]);
+        $module = new TestableModule($services);
+
+        $module->upgrade('4.0.5', '4.1.0', $services);
+
+        $this->assertSame([], $settings->get('media_type_whitelist'));
+    }
+
+    public function testUpgradeClaimsNoOwnershipOfPreExistingValues(): void
+    {
+        // Old releases recorded no provenance, so the upgrade withdraws the one
+        // value it knows they added without ever claiming the rest. Inventing
+        // ownership here would make a later uninstall subtract entries this
+        // module never demonstrably contributed.
+        $settings = new Settings();
+        $settings->set('media_type_whitelist', ['image/png', 'application/zip', 'application/octet-stream']);
+        $services = new TestServiceLocator(['Omeka\Settings' => $settings]);
+        $module = new TestableModule($services);
+
+        $module->upgrade('4.0.5', '4.1.0', $services);
+
+        $this->assertNull($settings->get('exelearning_whitelist_additions'));
+    }
+
+    public function testUninstallAfterAnUpgradeRevertsNothingItDidNotRecord(): void
+    {
+        $settings = new Settings();
+        $settings->set('media_type_whitelist', ['image/png', 'application/zip', 'application/octet-stream']);
+        $settings->set('extension_whitelist', ['png', 'zip', 'elpx']);
+        $services = new TestServiceLocator(['Omeka\Settings' => $settings]);
+        $module = new TestableModule($services);
+
+        $module->upgrade('4.0.5', '4.1.0', $services);
+        $module->uninstall($services);
+
+        $this->assertSame(
+            ['image/png', 'application/zip'],
+            $settings->get('media_type_whitelist'),
+            'uninstall may only take back what this version recorded adding'
+        );
+        $this->assertSame(['png', 'zip', 'elpx'], $settings->get('extension_whitelist'));
+    }
+
+    public function testUpgradeIsIdempotent(): void
+    {
+        $settings = new Settings();
+        $settings->set('media_type_whitelist', ['image/png', 'application/zip']);
+        $services = new TestServiceLocator(['Omeka\Settings' => $settings]);
+        $module = new TestableModule($services);
+
+        $module->upgrade('4.0.5', '4.1.0', $services);
+        $module->upgrade('4.1.0', '4.1.1', $services);
+
+        $this->assertSame(['image/png', 'application/zip'], $settings->get('media_type_whitelist'));
     }
 
     public function testUninstallSkipsAWhitelistThatIsNowEmpty(): void
@@ -663,115 +778,220 @@ class ModuleTest extends TestCase
         $this->assertSame('', (string) ob_get_clean());
     }
 
-    // --------------------------------------------- public item show (S3 shim)
+    // ------------------------------------ public item show (compatibility shim)
 
-    public function testHandlePublicItemShowRendersMediaWhenTheItemPageDoesNot(): void
+    /**
+     * An Omeka S 3 container: a theme manager, but no resource-page blocks.
+     *
+     * @param array<string, mixed> $extra
+     */
+    private function omekaS3(array $extra = []): TestServiceLocator
     {
-        // Omeka S 3 with item_media_embed off: core renders no media at all, so
-        // the module must, through the same renderer the rest of Omeka uses.
-        $exe = $this->makeMedia('course.elpx', 1);
-        $exe->rendered = '<div class="exelearning-viewer"></div>';
-        $other = $this->makeMedia('photo.png', 2);
-        $view = new PhpRenderer();
-        $view->item = new FakeItem([$exe, $other]);
+        return new TestServiceLocator(array_merge([
+            'Omeka\Site\ThemeManager' => new FakeThemeManager(),
+        ], $extra));
+    }
 
-        $module = new TestableModule(new TestServiceLocator([]));
+    /**
+     * An Omeka S 4 container, with the resolved block configuration to model.
+     *
+     * @param array<string, mixed> $extra
+     */
+    private function omekaS4(
+        ?FakeResourcePageBlockLayoutManager $blocks = null,
+        array $extra = []
+    ): TestServiceLocator {
+        return new TestServiceLocator(array_merge([
+            'Omeka\Site\ThemeManager' => new FakeThemeManager(),
+            'Omeka\ResourcePageBlockLayoutManager' => $blocks ?? new FakeResourcePageBlockLayoutManager(),
+        ], $extra));
+    }
+
+    /**
+     * @param array<int, object> $media
+     */
+    private function itemView(array $media, array $siteSettings = []): PhpRenderer
+    {
+        $view = new PhpRenderer();
+        $view->item = new FakeItem($media);
+        $view->siteSettings = $siteSettings;
+
+        return $view;
+    }
+
+    private function renderableElpx(int $id = 1): object
+    {
+        $media = $this->makeMedia('course.elpx', $id);
+        $media->rendered = '<div class="exelearning-viewer" data-media-id="' . $id . '"></div>';
+
+        return $media;
+    }
+
+    /**
+     * @param mixed $services
+     */
+    private function runPublicItemShow($services, PhpRenderer $view): string
+    {
+        $module = new TestableModule($services);
 
         ob_start();
         $module->handlePublicItemShow(new Event('view.show.after', $view));
-        $output = (string) ob_get_clean();
 
-        $this->assertSame('<div class="exelearning-viewer"></div>', $output);
+        return (string) ob_get_clean();
+    }
+
+    public function testOmekaS3RendersTheViewerWhenTheSiteDoesNotEmbedMedia(): void
+    {
+        // Omeka S 3 gates item-page media on item_media_embed, which defaults
+        // to off, so without this shim the viewer would simply not appear.
+        $exe = $this->renderableElpx();
+
+        $output = $this->runPublicItemShow(
+            $this->omekaS3(),
+            $this->itemView([$exe], ['item_media_embed' => false])
+        );
+
+        $this->assertSame($exe->rendered, $output);
         $this->assertSame(1, $exe->renderCalls);
-        $this->assertSame(0, $other->renderCalls, 'only eXeLearning media may render');
-        $this->assertSame([], $view->partials, 'the viewer comes from the renderer, not a partial');
     }
 
-    public function testHandlePublicItemShowStaysSilentOnOmekaS4(): void
+    public function testOmekaS3StaysSilentWhenTheSiteEmbedsMediaItself(): void
     {
-        // Omeka S 4 embeds media through resource page blocks, which are on by
-        // default; rendering here as well would show the viewer twice.
-        $exe = $this->makeMedia('course.elpx', 1);
-        $exe->rendered = '<div class="exelearning-viewer"></div>';
-        $view = new PhpRenderer();
-        $view->item = new FakeItem([$exe]);
-        $view->availableHelpers = ['resourcePageBlocks'];
+        $exe = $this->renderableElpx();
 
-        $module = new TestableModule(new TestServiceLocator([]));
+        $output = $this->runPublicItemShow(
+            $this->omekaS3(),
+            $this->itemView([$exe], ['item_media_embed' => true])
+        );
 
-        ob_start();
-        $module->handlePublicItemShow(new Event('view.show.after', $view));
-        $this->assertSame('', (string) ob_get_clean());
+        $this->assertSame('', $output);
+        $this->assertSame(0, $exe->renderCalls, 'core already rendered it; a second copy would be a duplicate');
+    }
+
+    public function testOmekaS4StaysSilentWhenMediaEmbedsIsInTheResolvedConfiguration(): void
+    {
+        // The default resolved configuration carries mediaEmbeds, so core calls
+        // $media->render() and the shim must not render a second viewer.
+        $exe = $this->renderableElpx();
+
+        $output = $this->runPublicItemShow($this->omekaS4(), $this->itemView([$exe]));
+
+        $this->assertSame('', $output);
         $this->assertSame(0, $exe->renderCalls);
     }
 
-    public function testHandlePublicItemShowStaysSilentWhenTheSiteEmbedsMediaItself(): void
+    public function testOmekaS4RendersTheViewerWhenMediaEmbedsWasRemoved(): void
     {
-        $exe = $this->makeMedia('course.elpx', 1);
-        $exe->rendered = '<div class="exelearning-viewer"></div>';
-        $view = new PhpRenderer();
-        $view->item = new FakeItem([$exe]);
-        $view->siteSettings = ['item_media_embed' => true];
+        // The case mere helper- or service-existence detection got wrong: the
+        // feature exists, but this site's resolved configuration no longer lists
+        // the block, so core renders no media and the viewer would vanish.
+        $exe = $this->renderableElpx();
 
-        $module = new TestableModule(new TestServiceLocator([]));
+        $output = $this->runPublicItemShow(
+            $this->omekaS4(FakeResourcePageBlockLayoutManager::withoutMediaEmbeds()),
+            $this->itemView([$exe])
+        );
 
-        ob_start();
-        $module->handlePublicItemShow(new Event('view.show.after', $view));
-        $this->assertSame('', (string) ob_get_clean());
+        $this->assertSame($exe->rendered, $output);
+        $this->assertSame(1, $exe->renderCalls);
+    }
+
+    public function testOmekaS4HonoursMediaEmbedsDeclaredInANonMainRegion(): void
+    {
+        // Themes may declare their own regions; a block anywhere in the item
+        // page still means core renders the media.
+        $exe = $this->renderableElpx();
+
+        $output = $this->runPublicItemShow(
+            $this->omekaS4(FakeResourcePageBlockLayoutManager::withMediaEmbedsInAnotherRegion()),
+            $this->itemView([$exe])
+        );
+
+        $this->assertSame('', $output);
         $this->assertSame(0, $exe->renderCalls);
     }
 
-    public function testHandlePublicItemShowDoesNotWriteDuringTheRender(): void
+    public function testResolvedBlocksAreReadForTheSitesCurrentTheme(): void
     {
-        // Extraction used to run inline here, mutating state in a GET request.
-        $exe = $this->makeMedia('course.elpx', 1);
-        $elp = new FakeElpFileService(null, false, false, false);
-        $view = new PhpRenderer();
-        $view->item = new FakeItem([$exe]);
-
-        $module = new TestableModule(new TestServiceLocator([
-            'Omeka\Logger' => new Logger(),
-            ElpFileService::class => $elp,
-        ]));
-
-        ob_start();
-        $module->handlePublicItemShow(new Event('view.show.after', $view));
-        ob_end_clean();
-
-        $this->assertSame(0, $elp->processCalls);
-    }
-
-    public function testHandlePublicItemShowStaysSilentWhenItCannotTellWhoRenders(): void
-    {
-        // If the view cannot answer, rendering nothing is safer than rendering
-        // the viewer a second time underneath the one core already produced.
-        $exe = $this->makeMedia('course.elpx', 1);
-        $exe->rendered = '<div class="exelearning-viewer"></div>';
-
-        $view = new class extends PhpRenderer {
-            public function getHelperPluginManager()
+        // getResourcePageBlocks() resolves per theme, so the shim must hand it
+        // the theme the site is actually running.
+        $theme = new class {
+            public function getSettingsKey(): string
             {
-                throw new \RuntimeException('no helper plugin manager');
+                return 'theme_settings_custom';
             }
         };
-        $view->item = new FakeItem([$exe]);
+        $blocks = FakeResourcePageBlockLayoutManager::withoutMediaEmbeds();
+        $services = new TestServiceLocator([
+            'Omeka\Site\ThemeManager' => new FakeThemeManager($theme),
+            'Omeka\ResourcePageBlockLayoutManager' => $blocks,
+        ]);
 
-        $module = new TestableModule(new TestServiceLocator([]));
+        $this->runPublicItemShow($services, $this->itemView([$this->renderableElpx()]));
 
-        ob_start();
-        $module->handlePublicItemShow(new Event('view.show.after', $view));
-        $this->assertSame('', (string) ob_get_clean());
+        $this->assertSame($theme, $blocks->themeReceived);
+    }
+
+    public function testTheShimRendersOnlyExeLearningMedia(): void
+    {
+        $exe = $this->renderableElpx(1);
+        $other = $this->makeMedia('photo.png', 2);
+        $other->rendered = '<img src="photo.png">';
+        $zip = $this->makeMedia('archive.zip', 3);
+        $zip->rendered = '<a href="archive.zip">archive</a>';
+
+        $output = $this->runPublicItemShow(
+            $this->omekaS4(FakeResourcePageBlockLayoutManager::withoutMediaEmbeds()),
+            $this->itemView([$exe, $other, $zip])
+        );
+
+        $this->assertSame($exe->rendered, $output);
+        $this->assertSame(0, $other->renderCalls);
+        $this->assertSame(0, $zip->renderCalls, 'a plain ZIP is not this module\'s media');
+    }
+
+    public function testTheShimNeverWritesDuringARender(): void
+    {
+        // Extraction used to run inline here, mutating state in a GET request.
+        $elp = new FakeElpFileService(null, false, false, false);
+
+        $output = $this->runPublicItemShow(
+            $this->omekaS4(FakeResourcePageBlockLayoutManager::withoutMediaEmbeds(), [
+                'Omeka\Logger' => new Logger(),
+                ElpFileService::class => $elp,
+            ]),
+            $this->itemView([$this->renderableElpx()])
+        );
+
+        $this->assertNotSame('', $output, 'the viewer still renders');
+        $this->assertSame(0, $elp->processCalls, 'no extraction may happen on a public GET');
+        $this->assertSame([], $elp->cleanedHashes);
+    }
+
+    public function testTheShimStaysSilentWhenItCannotTellWhoRenders(): void
+    {
+        // If the configuration cannot be read, rendering nothing is safer than
+        // rendering the viewer underneath the one core already produced.
+        $exe = $this->renderableElpx();
+        $services = new TestServiceLocator([
+            'Omeka\Site\ThemeManager' => new class {
+                public function getCurrentTheme()
+                {
+                    throw new \RuntimeException('no theme in this context');
+                }
+            },
+            'Omeka\ResourcePageBlockLayoutManager' => new FakeResourcePageBlockLayoutManager(),
+        ]);
+
+        $this->assertSame('', $this->runPublicItemShow($services, $this->itemView([$exe])));
         $this->assertSame(0, $exe->renderCalls);
     }
 
-    public function testHandlePublicItemShowIgnoresAnItemlessView(): void
+    public function testTheShimIgnoresAnItemlessView(): void
     {
         $view = new PhpRenderer();
-        $module = new TestableModule(new TestServiceLocator([]));
 
-        ob_start();
-        $module->handlePublicItemShow(new Event('view.show.after', $view));
-        $this->assertSame('', (string) ob_get_clean());
+        $this->assertSame('', $this->runPublicItemShow($this->omekaS4(), $view));
     }
 
     public function testHandleViewLayoutInjectsScriptsOnAdminRoutes(): void
@@ -895,6 +1115,33 @@ class ModuleTest extends TestCase
         $module->handleMediaHydrate(new Event('api.hydrate.post', null, ['entity' => $entity]));
 
         $this->assertSame('exelearning_renderer', $entity->renderer);
+    }
+
+    public function testSavingAMediaArmsOneMoreExtractionAttempt(): void
+    {
+        // A recorded failure stops the view hooks retrying on every render,
+        // which would otherwise make it permanent. Saving the media is the
+        // administrator's explicit retry, on a write request rather than a GET.
+        $entity = new FakeMediaEntity('course.elpx', 40, [
+            'exelearning_process_error' => 'Media file not found',
+            'exelearning_extracted_hash' => 'keep-me',
+        ]);
+        $module = new TestableModule();
+
+        $module->handleMediaHydrate(new Event('api.hydrate.post', null, ['entity' => $entity]));
+
+        $this->assertArrayNotHasKey('exelearning_process_error', $entity->data);
+        $this->assertSame('keep-me', $entity->data['exelearning_extracted_hash'], 'other data must survive');
+    }
+
+    public function testSavingAMediaWithNoRecordedFailureChangesNothing(): void
+    {
+        $entity = new FakeMediaEntity('course.elpx', 41, ['exelearning_extracted_hash' => 'abc']);
+        $module = new TestableModule();
+
+        $module->handleMediaHydrate(new Event('api.hydrate.post', null, ['entity' => $entity]));
+
+        $this->assertSame(['exelearning_extracted_hash' => 'abc'], $entity->data);
     }
 
     public function testHandleMediaHydrateNoLongerClaimsPlainZipUploads(): void

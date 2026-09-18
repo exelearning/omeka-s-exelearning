@@ -9,6 +9,7 @@ related_issues:
   - "exelearning/exelearning#2443"
   - "exelearning/exelearning#2444"
   - "exelearning/exelearning#2445"
+related_prs: [21]
 supersedes: []
 superseded_by: []
 ai_assistance:
@@ -118,9 +119,55 @@ moves into the renderer, gated on `isAdminRequest()`, `identity()`,
 is scoped to its own viewer element so several packages on one page do not
 rewrite each other's URLs.
 
-The `view.show.after` listener survives as a version shim — see
-[ADR-39-01](../../adr/ADR-39-01-render-media-through-the-media-renderer-manager.md).
-The sandbox decision is [ADR-39-02](../../adr/ADR-39-02-keep-allow-same-origin-on-the-package-iframe.md).
+The `view.show.after` listener survives as a compatibility shim — see
+[ADR-39-01](../../adr/ADR-39-01-render-media-through-the-media-renderer-manager.md)
+and the next section.
+
+### Does this page already render its media?
+
+`Module::itemPageEmbedsMedia()` answers the only question the shim needs, and
+takes the answer from Omeka rather than from a version string.
+
+`Omeka\ResourcePageBlockLayoutManager` exists in Omeka S 4 and not in S 3
+(`v4.2.0` `application/config/module.config.php:273`; absent in `v3.2.3`), so its
+presence in the container selects the branch:
+
+- **Absent (S 3):** `$view->siteSetting('item_media_embed', false)`. S 3's
+  `site/item/show.phtml` renders media only when that is on.
+- **Present (S 4):** `Module::itemPageHasMediaEmbedsBlock()` resolves the site's
+  actual configuration the same way
+  `Omeka\Service\ViewHelper\ResourcePageBlocksFactory` builds the helper —
+  `ThemeManager::getCurrentTheme()`, then
+  `Manager::getResourcePageBlocks($theme)` — and looks for `mediaEmbeds` in any
+  region of `items`.
+
+Checking that the helper or the service merely *exists* is not enough, and an
+earlier draft of this change made that mistake.
+`Manager::getResourcePageBlocks()` prefers the administrator's saved blocks,
+then the theme's `resource_page_blocks` INI section, and only then
+`RESOURCE_PAGE_BLOCKS_DEFAULT`; a site or theme that drops `mediaEmbeds` gets no
+media on its item pages, and the viewer would have vanished exactly as it does
+on an untreated S 3 site.
+
+Blocks are keyed by region and a theme may declare regions beyond `main`, so any
+region counts. Nothing is rendered to find this out and no generated markup is
+inspected. On any failure the shim reports "already embedded" and stays silent,
+because a missing viewer is a smaller fault than two stacked ones.
+
+### Iframe sandbox — out of scope, see PR #21
+
+Collapsing two viewers into one forces a single `sandbox` value to be written
+down. The value kept is the one every executing path already emitted, purely so
+this change does not alter the security posture while refactoring registration.
+
+It is **not** an isolation boundary: `allow-same-origin` with `allow-scripts` on
+content served from the Omeka origin lets package JavaScript act as that origin.
+`ZipSafety` guards extraction and the proxy's CSP is defence-in-depth; neither
+contains it.
+[PR #21](https://github.com/exelearning/omeka-s-exelearning/pull/21) implements
+the opaque-origin viewer that does, and owns that work. None of its design is
+duplicated here. Full reasoning and cost:
+[ADR-39-02](../../adr/ADR-39-02-preserve-current-iframe-behaviour-pending-opaque-origin-viewer.md).
 
 ### Claimed types
 
@@ -137,32 +184,97 @@ empty — Omeka's `File\Validator` reads an empty whitelist as "allow nothing", 
 writing one back would break every upload on the site. `uninstall()` removes
 exactly the recorded entries and the record.
 
+### Retrying a failed extraction
+
+`processUploadedFile()` records `exelearning_process_error` before rethrowing,
+and the admin view gates on it, which is what stops the retry-on-every-render
+loop. Left there, the marker would be permanent.
+
+`handleMediaHydrate()` clears it. That runs on `api.hydrate.post` — a write —
+so saving the media in the admin form is the retry: the administrator fixes the
+cause, saves, and the next admin view of that media makes one more attempt. The
+notice in the admin partial says so. No new route, no new button, no job
+system, and extraction never returns to a GET request.
+
 ## ADRs required or referenced
 
 | ADR | Decision |
 | --- | --- |
-| [ADR-39-01](../../adr/ADR-39-01-render-media-through-the-media-renderer-manager.md) | Route the viewer through `media_renderers`, keep a version-gated `view.show.after` shim for Omeka S 3 |
-| [ADR-39-02](../../adr/ADR-39-02-keep-allow-same-origin-on-the-package-iframe.md) | Keep `allow-same-origin` on the package iframe; the boundary is validation plus proxy headers |
+| [ADR-39-01](../../adr/ADR-39-01-render-media-through-the-media-renderer-manager.md) | Route the viewer through `media_renderers`, keep a configuration-gated `view.show.after` shim for pages core does not embed media on |
+| [ADR-39-02](../../adr/ADR-39-02-preserve-current-iframe-behaviour-pending-opaque-origin-viewer.md) | Preserve the current iframe behaviour unchanged; the trust boundary is out of scope and owned by PR #21 |
 
 ## Migration / rollout
 
-No data migration ships with this change, and none is needed for ELPX packages:
-on an affected installation `processUploadedFile()` threw before writing
-anything, so there are no extraction directories and no media data to move.
-Every `.elpx` is still unprocessed and is extracted on the next admin view, now
-into the correct directory.
+### ELPX packages
 
-Uploaded *styles* are the exception. `StylesService::installFromZip()` does not
-read `files/original/`, so style uploads succeeded — into
-`<OMEKA_PATH>/exelearning-styles/`. After this change they resolve under
-`<files>/exelearning-styles/` and a previously uploaded style 404s while the
-settings registry still advertises it. Re-uploading the package restores it. An
-automatic `rename()` in `upgrade()` was considered and rejected for now: it moves
-data outside the web root on every upgrade to repair a state only reachable
-through a bug, and the failure mode without it is visible and recoverable.
+Nothing to migrate. On an affected installation `processUploadedFile()` threw
+before writing anything, so there are no extraction directories and no media
+data to move. Every `.elpx` is still unprocessed and is extracted on the next
+admin view, now into the correct directory.
 
-Media already broken by the defect do not backfill on public pages, because
-extraction no longer runs during a GET. This is stated in the pull request.
+### Uploaded styles
+
+The exception. `StylesService::installFromZip()` does not read `files/original/`,
+so style uploads succeeded — into `<OMEKA_PATH>/exelearning-styles/`. After this
+change they resolve under `<files>/exelearning-styles/` and a previously
+uploaded style 404s while the settings registry still advertises it.
+Re-uploading the package restores it. An automatic `rename()` in `upgrade()` was
+considered and rejected: it moves data outside the web root on every upgrade to
+repair a state only reachable through a bug, and the failure mode without it is
+visible and recoverable.
+
+### The legacy upload whitelist
+
+Every released version up to and including 4.0.5 added
+`application/octet-stream` to the installation-wide `media_type_whitelist` and
+never took it back. Narrowing `install()` alone would therefore only ever reach
+fresh installations, and every upgraded site would keep the value forever —
+defeating half of `exelearning/exelearning#2444`.
+
+`upgrade()` now calls `dropLegacyWhitelistAdditions()`, which removes exactly
+that one value from `media_type_whitelist` and nothing else.
+
+The provenance problem is real and unsolvable: those releases recorded nothing,
+so whether the site already allowed `application/octet-stream` before installing
+this module cannot be known. Removing it regardless is a deliberate hardening
+call. It is defensible because the value is not an Omeka default, matches any
+unidentified binary, and is not needed for `.elpx`; and it is recoverable
+because an administrator who wants it can re-add it in Omeka's own settings,
+where the decision is then recorded as theirs. The alternative — leaving it
+forever because ownership is unknowable — keeps a site-wide upload relaxation
+nobody asked for.
+
+What the upgrade deliberately does **not** touch:
+
+| Value | Why it stays |
+| --- | --- |
+| `application/zip` | An Omeka default, and `.elpx` needs it |
+| `application/x-zip-compressed` | Needed where detection reports it |
+| `zip` in `extension_whitelist` | An Omeka default and a site-wide capability. Withdrawing the renderer aliases is what stops this module claiming ordinary ZIP files; removing the extension would break ZIP uploads for the rest of the installation |
+| every unrelated entry | Not this module's to remove |
+| an empty whitelist | Omeka reads it as "allow nothing"; writing one back would break every upload |
+
+Ownership bookkeeping stays conservative. The upgrade withdraws the value
+without ever claiming it in `exelearning_whitelist_additions`, so that record
+remains a log of what *this* version's `install()` demonstrably added, and a
+later `uninstall()` never subtracts entries the module cannot prove it
+contributed.
+
+### Legacy `.zip` media
+
+New `.zip` uploads are not claimed. A legacy `.zip` this module already
+extracted carries `exelearning_extracted_hash`, and
+`ElpFileService::isExeLearningMedia()` accepts that marker whatever the
+extension, so those keep rendering, keep being served and are still cleaned up
+on delete. One `||`, no migration.
+
+A `.zip` uploaded under an older version that failed *before* extraction has no
+marker and is not recovered; re-uploading as `.elpx` is the path. There are no
+known deployments in that state, but the module has public releases, so the
+limit is documented rather than assumed away.
+
+Media already broken by the path defect do not backfill on public pages, because
+extraction no longer runs during a GET. For `.elpx` the admin view repairs them.
 
 ## Testing strategy
 
@@ -178,8 +290,17 @@ extraction no longer runs during a GET. This is stated in the pull request.
 - `ExeLearningRendererTest` asserts `render()` returns non-empty HTML containing
   `exelearning-viewer` — the regression test the upstream issue asks for — plus
   the scoped URL rewriting and the admin-only edit button.
-- `ModuleTest` covers the shim on both core versions and asserts it performs no
-  write during the render.
+- `ModuleTest` covers the shim against a modelled resource-page configuration,
+  not a version flag: S 3 with `item_media_embed` off and on, S 4 with
+  `mediaEmbeds` present, removed, and declared in a non-`main` region, that the
+  blocks are resolved for the site's current theme, that only eXeLearning media
+  render, and that no extraction or write happens during the render.
+- `ModuleTest` covers the upgrade: `application/octet-stream` withdrawn,
+  unrelated entries and site-wide `zip` preserved, an empty whitelist left
+  empty, no ownership claimed over pre-existing values, a later uninstall
+  reverting only what was recorded, and idempotence across two upgrades.
+- `ModuleTest` covers the retry path: saving a media clears a recorded failure
+  and leaves its other data alone.
 - `ElpFileServiceTest` covers the failure marker and the `.elpx`-only rule,
   including the legacy-`.zip`-with-hash carve-out.
 

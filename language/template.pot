@@ -55,6 +55,10 @@ msgstr ""
 msgid "Open fullscreen"
 msgstr ""
 
+#: view/exelearning/admin/media-show.phtml:31
+msgid "Fix the cause, then save this media to try again."
+msgstr ""
+
 #: view/exelearning/admin/media-show.phtml:28
 msgid "This eXeLearning package could not be processed, so no preview is available."
 msgstr ""

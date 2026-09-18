@@ -29,6 +29,23 @@ class Module extends AbstractModule
     const SETTING_WHITELIST_ADDITIONS = 'exelearning_whitelist_additions';
 
     /**
+     * Omeka S 4's resource-page block manager. Absent in Omeka S 3, which is
+     * how this module tells the two apart without reading a version string.
+     */
+    const SERVICE_RESOURCE_PAGE_BLOCKS = 'Omeka\\ResourcePageBlockLayoutManager';
+
+    /** Core's block layout that calls $media->render() on an item page. */
+    const MEDIA_EMBEDS_BLOCK = 'mediaEmbeds';
+
+    /**
+     * Upload types earlier releases added that this version withdraws.
+     *
+     * See dropLegacyWhitelistAdditions() for why these are removed on upgrade
+     * even though their provenance was never recorded.
+     */
+    const LEGACY_WHITELIST_ADDITIONS = ['application/octet-stream'];
+
+    /**
      * What an .elpx upload needs, and nothing else.
      *
      * `application/octet-stream` used to be whitelisted here. It matches any
@@ -167,6 +184,57 @@ class Module extends AbstractModule
     public function upgrade($oldVersion, $newVersion, ServiceLocatorInterface $serviceLocator)
     {
         $this->removeEditorInstallerSettings($serviceLocator);
+        $this->dropLegacyWhitelistAdditions($serviceLocator);
+    }
+
+    /**
+     * Withdraw the over-broad upload type earlier releases added.
+     *
+     * Every released version up to and including 4.0.5 added
+     * `application/octet-stream` to the installation-wide
+     * `media_type_whitelist` and never took it back, so upgrading alone would
+     * leave it there forever and the narrowing in this version would only ever
+     * reach fresh installations.
+     *
+     * Those releases recorded no provenance, so whether the site already
+     * allowed the type before installing this module is genuinely unknowable.
+     * Removing it anyway is a deliberate hardening call, and it is defensible
+     * because the type is not an Omeka default, matches any unidentified binary,
+     * and is not needed for `.elpx`. An administrator who wants it can add it
+     * back in Omeka's own settings, where it is one checkbox and where the
+     * decision is recorded as theirs.
+     *
+     * Only this one value is touched. `application/zip`,
+     * `application/x-zip-compressed`, the `zip` and `elpx` extensions and every
+     * unrelated entry are left exactly as they are: withdrawing the renderer
+     * aliases is what stops this module claiming ordinary ZIP files, and doing
+     * it in the whitelist as well would break ZIP uploads for the rest of the
+     * installation.
+     *
+     * @param ServiceLocatorInterface $serviceLocator
+     */
+    protected function dropLegacyWhitelistAdditions(ServiceLocatorInterface $serviceLocator): void
+    {
+        $settings = $serviceLocator->get('Omeka\Settings');
+
+        $whitelist = array_values((array) $settings->get('media_type_whitelist', []));
+
+        // An empty whitelist means "allow nothing" to Omeka's file validator,
+        // never "not configured". Leave an unconfigured list alone.
+        if (!$whitelist) {
+            return;
+        }
+
+        $cleaned = array_values(array_diff($whitelist, self::LEGACY_WHITELIST_ADDITIONS));
+        if ($cleaned !== $whitelist) {
+            $settings->set('media_type_whitelist', $cleaned);
+        }
+
+        // Ownership of pre-bookkeeping values cannot be proven, so the value is
+        // withdrawn without ever being claimed in
+        // SETTING_WHITELIST_ADDITIONS -- that record stays a log of what this
+        // version's install() actually added, and uninstall() must not start
+        // subtracting entries the module never demonstrably contributed.
     }
 
     /**
@@ -292,12 +360,16 @@ class Module extends AbstractModule
      * Render eXeLearning media on item pages that core would otherwise skip.
      *
      * The viewer itself lives in ExeLearningRenderer, reached through
-     * $media->render(). Omeka S 4 calls that for every media via the
-     * `mediaEmbeds` resource page block, which is on by default; Omeka S 3 only
-     * calls it when the `item_media_embed` site setting is enabled, and that
-     * setting defaults to off. On such a site the item page would show no
-     * viewer at all, so this hook renders it — and only then, so a page that
-     * already embedded the media does not show it twice.
+     * $media->render(); this hook only decides whether the page is one where
+     * core never calls it. See itemPageEmbedsMedia() for how that is
+     * established -- on Omeka S 3 the `item_media_embed` site setting, which
+     * defaults to off, and on Omeka S 4 whether `mediaEmbeds` survives in the
+     * site's resolved resource-page block configuration. On such a page the
+     * item would otherwise show no viewer at all; everywhere else this stays
+     * silent so the viewer is never rendered twice.
+     *
+     * Read-only by contract: no extraction, no media data written. Repairing an
+     * unprocessed package belongs to the admin view, not to a public GET.
      *
      * @param Event $event
      */
@@ -320,24 +392,66 @@ class Module extends AbstractModule
     /**
      * Whether this item page already renders its media itself.
      *
+     * Omeka S 4 and Omeka S 3 answer this in completely different ways, and the
+     * two services below are the capability probe: the resource-page block
+     * manager exists only in S4, so its presence identifies the core version
+     * without comparing version strings.
+     *
      * @param mixed $view
      * @return bool
      */
     protected function itemPageEmbedsMedia($view): bool
     {
         try {
-            // Omeka S 4 registers this helper and embeds media through resource
-            // page blocks; Omeka S 3 has no such helper.
-            if ($view->getHelperPluginManager()->has('resourcePageBlocks')) {
-                return true;
+            $services = $this->getServiceLocator();
+
+            if (!$services->has(self::SERVICE_RESOURCE_PAGE_BLOCKS)) {
+                // Omeka S 3 has no resource page blocks; one site setting
+                // decides whether item pages embed media at all.
+                return (bool) $view->siteSetting('item_media_embed', false);
             }
 
-            return (bool) $view->siteSetting('item_media_embed', false);
+            return $this->itemPageHasMediaEmbedsBlock($services);
         } catch (\Throwable $e) {
-            // Without a usable view we cannot tell; rendering nothing is safer
-            // than rendering the viewer twice.
+            // Without a usable view or container we cannot tell; rendering
+            // nothing is safer than rendering the viewer twice.
             return true;
         }
+    }
+
+    /**
+     * Whether the current site's resolved item page includes `mediaEmbeds`.
+     *
+     * The block being registered is not the question -- it always is. The
+     * question is whether this site's *resolved* configuration still lists it,
+     * because `Manager::getResourcePageBlocks()` prefers the site
+     * administrator's saved blocks, then the theme's `resource_page_blocks`
+     * from its INI file, and only falls back to
+     * `RESOURCE_PAGE_BLOCKS_DEFAULT` when neither is set. An administrator or a
+     * theme may drop `mediaEmbeds`, and then core never calls
+     * `$media->render()` on the item page.
+     *
+     * This mirrors what `Omeka\Service\ViewHelper\ResourcePageBlocksFactory`
+     * does to build the helper, so it reads the same configuration core renders
+     * from -- without rendering anything or inspecting generated markup.
+     *
+     * @param mixed $services
+     * @return bool
+     */
+    protected function itemPageHasMediaEmbedsBlock($services): bool
+    {
+        $theme = $services->get('Omeka\Site\ThemeManager')->getCurrentTheme();
+        $blocks = $services->get(self::SERVICE_RESOURCE_PAGE_BLOCKS)->getResourcePageBlocks($theme);
+
+        // Blocks are grouped by region, and a theme may declare regions beyond
+        // "main", so any region carrying the block counts.
+        foreach ($blocks['items'] ?? [] as $regionBlocks) {
+            if (is_array($regionBlocks) && in_array(self::MEDIA_EMBEDS_BLOCK, $regionBlocks, true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -581,6 +695,15 @@ JS
                 $entity->setRenderer('exelearning_renderer');
             }
 
+            // Saving the media is the retry. A failed extraction is remembered
+            // so the view hooks stop reattempting it on every render, which
+            // would otherwise make the marker permanent; clearing it here gives
+            // an administrator who has fixed the underlying problem -- file
+            // permissions, a re-upload, a corrected files directory -- an
+            // explicit way to arm one more attempt, on a write request rather
+            // than a GET. The next admin view of the media performs it.
+            $this->clearProcessingError($entity);
+
             // Persist custom eXeLearning media settings from admin edit form.
             $request = $event->getParam('request');
             if ($request && method_exists($request, 'getContent')) {
@@ -600,6 +723,26 @@ JS
                 }
             }
         }
+    }
+
+    /**
+     * Forget a previous extraction failure, so the next admin view retries.
+     *
+     * @param mixed $entity
+     */
+    protected function clearProcessingError($entity): void
+    {
+        if (!method_exists($entity, 'getData') || !method_exists($entity, 'setData')) {
+            return;
+        }
+
+        $data = $entity->getData() ?? [];
+        if (!is_array($data) || !array_key_exists('exelearning_process_error', $data)) {
+            return;
+        }
+
+        unset($data['exelearning_process_error']);
+        $entity->setData($data);
     }
 
     /**

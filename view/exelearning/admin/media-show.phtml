@@ -28,6 +28,9 @@ if ($canEdit && $editorInstalled) {
         <?= $this->escapeHtml($this->translate('This eXeLearning package could not be processed, so no preview is available.')) ?>
     </p>
     <p><code><?= $this->escapeHtml($processingError) ?></code></p>
+    <p>
+        <?= $this->escapeHtml($this->translate('Fix the cause, then save this media to try again.')) ?>
+    </p>
 </div>
 <?php endif; ?>
 

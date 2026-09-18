@@ -29,15 +29,6 @@ class PhpRenderer
     /** @var string */
     public string $basePath = '';
 
-    /**
-     * View helpers this renderer claims to have. Omeka S 4 registers
-     * `resourcePageBlocks` and Omeka S 3 does not, which is how Module tells the
-     * two apart; tests set this to pick a core version.
-     *
-     * @var array<int, string>
-     */
-    public array $availableHelpers = [];
-
     /** @var array<string, mixed> Values returned by siteSetting(). */
     public array $siteSettings = [];
 
@@ -148,20 +139,7 @@ class PhpRenderer
 
     public function getHelperPluginManager()
     {
-        return new class ($this->availableHelpers) {
-            /** @var array<int, string> */
-            private array $available;
-
-            public function __construct(array $available)
-            {
-                $this->available = $available;
-            }
-
-            public function has(string $name): bool
-            {
-                return in_array($name, $this->available, true);
-            }
-
+        return new class {
             public function get(string $name)
             {
                 throw new \Exception('No helper found: ' . $name);

@@ -49,6 +49,16 @@ installed module still has to uninstall cleanly.
   `exelearning_whitelist_additions`, and have `uninstall()` take back exactly
   those. Never write back a whitelist that was read empty: Omeka's file validator
   reads an empty list as "allow nothing".
+- `upgrade()` also withdraws `Module::LEGACY_WHITELIST_ADDITIONS` -- values older
+  releases added without recording provenance. Withdraw such a value without
+  claiming it in the bookkeeping setting, so `uninstall()` never subtracts
+  entries the module cannot prove it added.
+- To decide whether a site page already renders media, read Omeka's resolved
+  configuration, never the mere existence of a helper or service:
+  `Omeka\ResourcePageBlockLayoutManager` (S4 only) plus
+  `Omeka\Site\ThemeManager::getCurrentTheme()`, exactly as core's
+  `ResourcePageBlocksFactory` does. Its absence identifies Omeka S 3, where
+  the `item_media_embed` site setting decides instead.
 - `uninstall()` and `upgrade()` both call `removeEditorInstallerSettings()`.
   Deleting a key that was never set must not fail.
 - Adding a new setting means deciding what `uninstall()` does with it. Leaving

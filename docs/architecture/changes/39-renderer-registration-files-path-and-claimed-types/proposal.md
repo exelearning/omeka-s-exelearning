@@ -14,6 +14,7 @@ related_issues:
 related_adrs:
   - ADR-39-01
   - ADR-39-02
+related_prs: [21]
 supersedes: []
 superseded_by: []
 ai_assistance:
@@ -79,8 +80,18 @@ In scope:
 
 Out of scope:
 
-- A bulk reprocess job or CLI task for media broken by the path defect. Opening
-  the media in admin still repairs it; a bulk path is a separate change.
+- **The iframe trust boundary, and the whole opaque-origin viewer.** Package
+  JavaScript runs in the Omeka origin today and this change does not fix that.
+  [PR #21](https://github.com/exelearning/omeka-s-exelearning/pull/21) owns it
+  and is already in review. Nothing from its design —
+  `IframeSandbox`, preview snapshots, the capability-URL preview route, the
+  external-media relay, the response-level sandbox CSP — is ported here. See
+  [ADR-39-02](../../adr/ADR-39-02-preserve-current-iframe-behaviour-pending-opaque-origin-viewer.md),
+  which records the temporary state and its cost.
+- A bulk reprocess job or CLI task. `.elpx` media broken by the path defect are
+  repaired by opening them in admin; media the module no longer recognises are
+  not, and that limit is stated in *Non-goals*.
+- A migration for `.zip` media that were never extracted. See *Non-goals*.
 - Dropping Omeka S 3 support. See [ADR-39-01](../../adr/ADR-39-01-render-media-through-the-media-renderer-manager.md).
 - The stale `language/template.pot`, which is missing msgids for code unrelated
   to this change. Regenerating it here would bury this diff.
@@ -95,11 +106,19 @@ Out of scope:
 - `$media->render()` for an `.elpx` media returns non-empty HTML containing
   `exelearning-viewer`.
 - The viewer is rendered exactly once per media on both the admin media page and
-  a public item page, on Omeka S 3 and Omeka S 4.
+  a public item page: on Omeka S 3 whether or not `item_media_embed` is set, and
+  on Omeka S 4 whether or not the site's resolved resource-page block
+  configuration still contains `mediaEmbeds`.
+- Public rendering performs no extraction and no database write.
 - An unprocessable media is attempted once, not once per render, and the reason
   is visible to an administrator rather than only in the log.
 - A plain `.zip` uploaded to the site is not claimed by this module, while a
   package this module already extracted keeps working.
+- An installation upgrading from a released version no longer carries
+  `application/octet-stream` in its site-wide upload whitelist, while every
+  unrelated entry — including site-wide `zip` support — is untouched.
+- An administrator who fixes the cause of a failed extraction has an explicit
+  way to retry it, without extraction ever returning to a GET request.
 - `make lint`, `make test-coverage` and `make check-untranslated` pass, with
   coverage at or above the 90 ratchet.
 
@@ -109,3 +128,17 @@ Out of scope:
   always meant to land; this change makes it land there.
 - Changing the content proxy's response headers or its ZIP validation.
 - Adding a configuration option for any of the above.
+- **Recovering unprocessed legacy `.zip` media.** What this change guarantees,
+  exactly:
+  - new `.zip` uploads are not claimed by this module;
+  - a legacy `.zip` that this module already extracted — and therefore carries
+    `exelearning_extracted_hash` — keeps rendering, keeps its content served and
+    is cleaned up on delete;
+  - a `.zip` uploaded under an older version that failed *before* extraction has
+    no such marker, is not recognised, and is **not** recovered by this change.
+    Re-uploading it as `.elpx` is the path. There are no known deployments in
+    this state, but the module has public releases, so the limit is stated
+    rather than assumed away;
+  - `.elpx` media left unprocessed by the path defect are repaired by opening
+    them in admin.
+- A job or queue system for reprocessing.
