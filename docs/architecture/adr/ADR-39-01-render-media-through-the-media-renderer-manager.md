@@ -109,30 +109,30 @@ It is not sufficient by itself, though: it fixes the S3 default and leaves the
 S4 configuration case (option 4) untouched. A site or theme that removes
 `mediaEmbeds` still loses the viewer.
 
-### Option 4: Option 3, plus a listener kept for the one case configuration can remove
+### Option 4: Option 3, plus a listener that re-renders when `mediaEmbeds` is absent
 
-Narrow to `^4.0.0`, register the renderer where the column is resolved, delete
-the duplicate partial, and keep the `view.show.after` listener reduced to a
-single job: call `$media->render()` when — and only when — the item page did not
-embed the media itself.
+Narrow to `^4.0.0`, register the renderer, delete the duplicate partial, and keep
+the `view.show.after` listener for one case: an S 4 site whose resolved
+resource-page block configuration no longer lists `mediaEmbeds`, where core
+renders no media at all.
 
-The question the listener answers is not "which Omeka is this", it is "does this
-page already render its media", and on Omeka S 4 that is configuration, not
-version.
+This was implemented and then withdrawn. Two problems, and the second is fatal.
 
-**Helper or service existence is not sufficient**, and an earlier draft of this
-change got that wrong. The `resourcePageBlocks` helper always exists and
-`mediaEmbeds` is always registered; what varies is whether this *site's*
-configuration still lists the block.
-`Manager::getResourcePageBlocks()` prefers the administrator's saved blocks,
-then the theme's `resource_page_blocks` INI section, and only then
-`RESOURCE_PAGE_BLOCKS_DEFAULT`. An administrator or a theme may drop
-`mediaEmbeds`, and then core renders no media and the viewer vanishes — the very
-regression option 1 causes on S 3, reappearing on S 4 through configuration.
+**It overrides the administrator's configuration.** On Omeka S 4, removing
+`mediaEmbeds` *is* the supported way to say "this item page does not embed its
+media". Re-rendering anyway, for eXeLearning alone, makes this module the one
+media type that ignores that setting — and puts its viewer back at the end of the
+template, outside where the theme places media, which is consequence 1 of
+`exelearning/exelearning#2443` returning by another route.
 
-Reading the resolved configuration answers it exactly, and with S 3 out of the
-support range it is the *only* branch the listener needs: one method, no version
-probe, and it does not even need the view.
+**The configuration cannot answer the question anyway.** Blocks are stored per
+region, but a region only renders if the template asks for it:
+`$this->resourcePageBlocks($item, 'sidebar')->getBlocks()`
+(`v4.2.0` `application/src/View/Helper/ResourcePageBlocks.php`, `__invoke($resource, $regionName = 'main')`).
+`mediaEmbeds` configured in a region the template never invokes is configured and
+never rendered. So "the block appears somewhere in the configuration" does not
+imply "core renders the media", and the inverse inference fails too. There is no
+reliable read; the check would be a guess wearing the costume of a lookup.
 
 ## Evidence
 
@@ -178,13 +178,22 @@ probe, and it does not even need the view.
 
 ## Decision
 
-We will adopt option 4.
+We will adopt options 1 and 3 together: **narrow to Omeka S 4 and delete the
+listener outright**, which is what `exelearning/exelearning#2443` asked for.
 
 **`config/module.ini` narrows to `omeka_version_constraint = "^4.0.0"`.** Omeka
-S 3 is old, its item pages do not embed media by default, and supporting it
-meant a second branch in the listener below. Dropping it is what makes the rest
-of this decision one code path instead of two. The module's PHP floor is
-unaffected: Omeka S 4.0 and 4.1 still allow PHP 7.4.
+S 3 does not embed media on item pages by default, so on S 3 option 1 really was
+a regression and really did need a compatibility path. Dropping S 3 removes the
+reason that path existed. The module's PHP floor is unaffected: Omeka S 4.0 and
+4.1 still allow PHP 7.4.
+
+**The `Omeka\Controller\Site\Item` / `view.show.after` listener is deleted**,
+along with `handlePublicItemShow()`, `itemPageEmbedsMedia()` and the
+configuration lookup behind it. Whether an item page embeds its media is Omeka's
+decision and the site administrator's, expressed through resource page blocks.
+This module registers a renderer and stops there; every surface that chooses to
+render a media gets the viewer, and a page configured not to embed media does not
+— exactly as for every other media type in the installation.
 
 `ExeLearningRenderer` implements both renderer interfaces and is registered
 under `media_renderers`, so `$media->render()` produces the viewer on every
@@ -195,11 +204,15 @@ media stored before this module claimed them, whose `renderer` column is still
 `view/exelearning/public/item-show.phtml` is deleted and the admin partial is
 reduced to the editor modal, leaving one implementation of the viewer.
 
-The `Omeka\Controller\Site\Item` / `view.show.after` listener is kept for the one
-case configuration can still produce: it calls `$media->render()` when
-`mediaEmbeds` is absent from the site's resolved resource-page block
-configuration, and stays silent otherwise. It renders the same renderer, not a
-second implementation, and it performs no write.
+The resulting flow has no module-side inference in it at all:
+
+```
+media.renderer = exelearning_renderer
+      ↓  Omeka\Media\Renderer\Manager
+ExeLearningRenderer
+      ↓
+every Omeka surface that decides to render that media
+```
 
 ## Consequences
 
@@ -208,9 +221,12 @@ second implementation, and it performs no write.
 - `$media->render()` works on media show pages, page blocks, item showcases,
   search results and any theme that calls it — none of which the listener ever
   covered.
-- One supported core means one detection path. `itemPageEmbedsMedia()` reads the
-  resolved configuration and nothing else: no version probe, no site-setting
-  fallback, and it does not need the view.
+- **No `view.show.after` listener on the public side at all**, which is what the
+  issue asked for. Themes place and style the viewer, because it arrives through
+  the normal media-rendering path.
+- The module no longer tries to infer what a theme "should" have rendered, so a
+  whole class of unreliable configuration reads disappears: two constants, two
+  methods, two test doubles and their tests.
 - Themes can position and style the viewer, because it arrives through the
   normal media-rendering path rather than appended after the template.
 - One viewer implementation. The divergent sandbox attribute, the 43-line inline
@@ -222,11 +238,12 @@ second implementation, and it performs no write.
 ### Negative
 
 - **Omeka S 3 installations can no longer install this version.** Deliberate.
-  They stay on the last release that supported them.
-- The `view.show.after` listener remains, which the upstream issue asked to
-  remove outright. It is now one small method with a single documented purpose
-  rather than a parallel viewer, and it exists solely for S 4 sites that removed
-  `mediaEmbeds`.
+  `v4.0.5` is the last published release that supports them.
+- **A site that removed `mediaEmbeds` shows no eXeLearning viewer on its item
+  pages.** That is now the intended behaviour — it is what removing the block
+  means — but it is a behaviour change for anyone who removed the block and still
+  expected this module's viewer. It is configuration, and re-adding the block
+  restores it.
 - The shim reads Omeka's configuration, so it is correct for themes that render
   through the normal resource-page block mechanism. A theme that overrides
   `site/item/show.phtml` and bypasses `resourcePageBlocks()` entirely is outside
@@ -239,20 +256,14 @@ second implementation, and it performs no write.
 
 ## Risks
 
-- **A theme that bypasses resource-page blocks.** An S 4 theme may ship its own
-  `site/item/show.phtml` that neither calls `resourcePageBlocks()` nor
-  `$media->render()`, or that calls `$media->render()` directly without the
-  block. The resolved configuration cannot describe either case: in the first
-  the viewer does not appear, in the second it appears twice. This is not
-  inferable from configuration and is not guessed at. Such a theme is
-  responsible for its own media rendering, exactly as it is for every other
-  media type in Omeka.
-- **Double render on a core version not tested here.** Medium impact, low
-  likelihood: the shim covers the two documented embedding mechanisms in the
-  supported range. A third would need a third branch.
+- **A theme that never renders media.** A theme whose `site/item/show.phtml`
+  neither invokes the region carrying `mediaEmbeds` nor calls `$media->render()`
+  shows no viewer. This is no longer the module's problem to detect or work
+  around: such a theme renders no media of any type, and that is its own
+  contract with the site.
 - **Wider exposure of package JavaScript.** The renderer now runs on more
   surfaces than the listener did. The exposure itself is unchanged in kind and
-  is the subject of [ADR-39-02](./ADR-39-02-keep-allow-same-origin-on-the-package-iframe.md).
+  is the subject of [ADR-39-02](./ADR-39-02-preserve-current-iframe-behaviour-pending-opaque-origin-viewer.md).
 
 ## Validation
 
@@ -262,20 +273,17 @@ upstream issue asks for. `ModuleTest` asserts the `media_renderers`
 registration, that the renderer satisfies the interface `Manager` enforces, and
 that the `file_renderers` aliases are exactly `['elpx' => …]`.
 
-The listener is covered against a modelled resource-page configuration rather
-than a version flag: the resolved configuration containing `mediaEmbeds`
-(silent), with it removed (renders), and with it declared in a non-`main` region
-(silent); that the resolved blocks are read for the site's current theme; that
-only eXeLearning media render; that an unreadable configuration keeps it silent;
-and that no extraction or write happens during the render.
+`ModuleTest::testAttachListenersRegistersEveryOmekaHook` pins the full listener
+roster, so re-adding a public `view.show.after` hook is a visible change to a
+test that states why there is none.
 
-Review if Omeka ever makes `mediaEmbeds` non-removable, or drops resource page
-blocks: the listener would then have no remaining case and could go.
+Review if Omeka changes how resource pages render media.
 
 ## Follow-up work
 
-- Announce the dropped Omeka S 3 support in the release notes, and state which
-  module release is the last one S 3 sites can use.
+- Announce in the release notes that Omeka S 3 is no longer supported and that
+  `v4.0.5` is the last release for those sites, and that a site which removed the
+  `mediaEmbeds` block will no longer see the eXeLearning viewer on item pages.
 - Consider a bulk reprocess job for media that were never extracted, now that
   public rendering no longer repairs them.
 
@@ -283,5 +291,5 @@ blocks: the listener would then have no remaining case and could go.
 
 - exelearning/exelearning#2443, exelearning/exelearning#2444
 - [Change 39](../changes/39-renderer-registration-files-path-and-claimed-types/design.md)
-- [ADR-39-02](./ADR-39-02-keep-allow-same-origin-on-the-package-iframe.md)
+- [ADR-39-02](./ADR-39-02-preserve-current-iframe-behaviour-pending-opaque-origin-viewer.md)
 - omeka/omeka-s `v3.2.3` and `v4.2.0`, paths cited inline above

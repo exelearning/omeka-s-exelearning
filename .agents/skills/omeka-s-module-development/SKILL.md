@@ -5,7 +5,7 @@ description: "Use when working on this Omeka S module's structure: Module.php li
 
 # Omeka S Module Development
 
-Compatibility: Omeka S >= 3.0 on PHP >= 7.4 (composer.json pins the 7.4 platform; CI runs 8.3). Laminas MVC 3 / ServiceManager 3.
+Compatibility: Omeka S >= 4.0 on PHP >= 7.4 (composer.json pins the 7.4 platform; CI runs 8.3). Laminas MVC 3 / ServiceManager 3.
 
 
 ## When to use
@@ -104,7 +104,7 @@ Three rules this module already enforces; keep them intact.
 URLs are built from the **request URI**, not `getBasePath()`. In the PHP-WASM
 playground the prefix (`/playground/{uuid}/php83/`) is present in the request URI
 but missing from `$_SERVER['SCRIPT_NAME']`, so `getBasePath()` lies.
-`Module::extractBasePath()` derives the prefix by truncating at the first
+`extractBasePath()` (in the controllers and the renderer) derives the prefix by truncating at the first
 `/admin/`, `/s/` or `/api/` segment. Any new URL construction must go through the
 same helper, and prefer emitting a **relative** content path that the client
 resolves against `window.location`.

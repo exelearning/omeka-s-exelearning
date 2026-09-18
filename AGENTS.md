@@ -11,8 +11,9 @@ check `config/module.ini` and CI for supported Omeka/runtime versions.
   service factories; do not patch core or introduce a parallel framework.
 - Keep uploaded content behind `ContentController`. Preserve ZIP/path validation, iframe isolation,
   content-type-specific headers, CSRF checks and authorization as separate boundaries.
-- Use `Module::extractBasePath()` for request-prefix handling; `getBasePath()` is unreliable in
-  scoped installations. Keep the embedded editor and uploaded preview as separate trust contexts.
+- Derive the request prefix from the request URI (`extractBasePath()` in the controllers and the
+  renderer); `getBasePath()` is unreliable in scoped installations. Keep the embedded editor and
+  uploaded preview as separate trust contexts.
 - PSR2 applies. Factories stay wiring-only. Test stubs are in `test/Stubs/`; collaborator doubles
   are in `test/ExeLearningTest/Doubles/`. Preserve gettext translation handling.
 

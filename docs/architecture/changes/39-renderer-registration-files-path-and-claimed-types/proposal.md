@@ -69,9 +69,9 @@ by this one.
 
 In scope:
 
-- Narrowing supported Omeka to `^4.0.0`. Omeka S 3 is old, does not embed media
-  on item pages by default, and supporting it meant a second branch in every
-  rendering decision below.
+- Narrowing supported Omeka to `^4.0.0`. Omeka S 3 does not embed media on item
+  pages by default, so it was the only reason a public compatibility listener
+  existed at all; dropping it lets that listener go entirely.
 
 - Resolving Omeka's files directory once, correctly, for every consumer.
 - Recording why an extraction failed, so it is not retried on every render.
@@ -108,9 +108,8 @@ Out of scope:
   `dirname()` cannot be reintroduced.
 - `$media->render()` for an `.elpx` media returns non-empty HTML containing
   `exelearning-viewer`.
-- The viewer is rendered exactly once per media on both the admin media page and
-  a public item page, whether or not the site's resolved resource-page block
-  configuration still contains `mediaEmbeds`.
+- The viewer is rendered exactly once per media, wherever Omeka decides to render
+  that media, and the module adds no rendering path of its own on the public side.
 - Public rendering performs no extraction and no database write.
 - An unprocessable media is attempted once, not once per render, and the reason
   is visible to an administrator rather than only in the log.

@@ -14,8 +14,6 @@ use ExeLearningTest\Doubles\FakeElpFileService;
 use ExeLearningTest\Doubles\FakeHttpRequest;
 use ExeLearningTest\Doubles\FakeItem;
 use ExeLearningTest\Doubles\FakeMediaEntity;
-use ExeLearningTest\Doubles\FakeResourcePageBlockLayoutManager;
-use ExeLearningTest\Doubles\FakeThemeManager;
 use ExeLearningTest\Doubles\FakeSourceOnlyEntity;
 use ExeLearningTest\Doubles\RecordingSettings;
 use ExeLearningTest\Doubles\RecordingSharedEventManager;
@@ -289,15 +287,40 @@ class ModuleTest extends TestCase
         $this->assertSame(['png', 'zip', 'elpx'], $settings->get('extension_whitelist'));
     }
 
-    public function testUpgradeIsIdempotent(): void
+    public function testALaterUpgradeDoesNotUndoAnAdministratorsChoice(): void
+    {
+        // The whole reason withdrawing the value is defensible is that the
+        // decision becomes the administrator's. Re-running the withdrawal on
+        // every future upgrade would take it back off them again.
+        $settings = new Settings();
+        $settings->set('media_type_whitelist', ['image/png', 'application/octet-stream']);
+        $services = new TestServiceLocator(['Omeka\Settings' => $settings]);
+        $module = new TestableModule($services);
+
+        $module->upgrade('4.0.5', '4.1.0', $services);
+        $this->assertNotContains('application/octet-stream', $settings->get('media_type_whitelist'));
+
+        // The administrator deliberately puts it back.
+        $settings->set('media_type_whitelist', ['image/png', 'application/octet-stream']);
+
+        $module->upgrade('4.1.0', '4.1.1', $services);
+
+        $this->assertContains(
+            'application/octet-stream',
+            $settings->get('media_type_whitelist'),
+            'an upgrade past the boundary must leave the administrator\'s choice alone'
+        );
+    }
+
+    public function testUpgradeIsIdempotentAcrossTheBoundary(): void
     {
         $settings = new Settings();
         $settings->set('media_type_whitelist', ['image/png', 'application/zip']);
         $services = new TestServiceLocator(['Omeka\Settings' => $settings]);
         $module = new TestableModule($services);
 
+        $module->upgrade('4.0.3', '4.1.0', $services);
         $module->upgrade('4.0.5', '4.1.0', $services);
-        $module->upgrade('4.1.0', '4.1.1', $services);
 
         $this->assertSame(['image/png', 'application/zip'], $settings->get('media_type_whitelist'));
     }
@@ -405,10 +428,9 @@ class ModuleTest extends TestCase
         $this->assertSame([
             'Omeka\Api\Adapter\MediaAdapter::api.hydrate.post',
             'Omeka\Api\Adapter\MediaAdapter::api.create.post',
-            'Omeka\Api\Adapter\MediaAdapter::api.delete.pre',
+            'Omeka\Api\Adapter\MediaAdapter::api.delete.post',
             'Omeka\Controller\Admin\Media::view.show.after',
             '*::view.layout',
-            'Omeka\Controller\Site\Item::view.show.after',
             'Omeka\Api\Representation\MediaRepresentation::rep.resource.json',
         ], $registered);
 
@@ -448,131 +470,6 @@ class ModuleTest extends TestCase
         ];
     }
 
-    /**
-     * @dataProvider basePathProvider
-     */
-    public function testExtractBasePathStripsFromTheFirstOmekaRouteSegment(
-        string $uriPath,
-        string $expected
-    ): void {
-        $module = new TestableModule();
-        $this->assertSame($expected, $module->callExtractBasePath($uriPath));
-    }
-
-    /**
-     * @return array<string, array{0: string, 1: string}>
-     */
-    public function basePathProvider(): array
-    {
-        return [
-            'admin at root' => ['/admin/media/1', ''],
-            'site at root' => ['/s/mysite/item/3', ''],
-            'api at root' => ['/api/items', ''],
-            'playground prefix' => ['/playground/abc-123/php83/admin/media/1', '/playground/abc-123/php83'],
-            'subdirectory install' => ['/omeka/admin/item', '/omeka'],
-            'no known marker' => ['/some/other/path', ''],
-            'admin wins when first' => ['/base/admin/x/s/y', '/base'],
-        ];
-    }
-
-    public function testBuildContentUrlOmitsDefaultPorts(): void
-    {
-        $module = new TestableModule($this->servicesWithRequest('https', 'example.org', 443, '/admin/media/1'));
-        $this->assertSame(
-            'https://example.org/exelearning/content/abc/index.html',
-            $module->callBuildContentUrl('abc')
-        );
-
-        $module = new TestableModule($this->servicesWithRequest('http', 'example.org', 80, '/admin/media/1'));
-        $this->assertSame(
-            'http://example.org/exelearning/content/abc/index.html',
-            $module->callBuildContentUrl('abc')
-        );
-    }
-
-    public function testBuildContentUrlKeepsNonDefaultPortAndBasePath(): void
-    {
-        $module = new TestableModule(
-            $this->servicesWithRequest('http', 'localhost', 8080, '/omeka/admin/media/1')
-        );
-        $this->assertSame(
-            'http://localhost:8080/omeka/exelearning/content/deadbeef/index.html',
-            $module->callBuildContentUrl('deadbeef')
-        );
-    }
-
-    public function testBuildContentUrlHandlesAbsentPort(): void
-    {
-        $module = new TestableModule($this->servicesWithRequest('https', 'example.org', null, '/api/items'));
-        $this->assertSame(
-            'https://example.org/exelearning/content/h/index.html',
-            $module->callBuildContentUrl('h')
-        );
-    }
-
-    /**
-     * @dataProvider teacherModeProvider
-     * @param mixed $stored
-     */
-    public function testIsTeacherModeVisibleReadsThePerMediaFlag($stored, bool $expected): void
-    {
-        $module = new TestableModule();
-        $data = $stored === null ? [] : ['exelearning_teacher_mode_visible' => $stored];
-        $this->assertSame(
-            $expected,
-            $module->callIsTeacherModeVisible($this->makeMedia('a.elpx', 1, $data))
-        );
-    }
-
-    /**
-     * @return array<string, array{0: mixed, 1: bool}>
-     */
-    public function teacherModeProvider(): array
-    {
-        return [
-            'unset' => [null, false],
-            'string zero' => ['0', false],
-            'literal false' => ['false', false],
-            'literal no' => ['no', false],
-            'string one' => ['1', true],
-            'integer one' => [1, true],
-            'literal yes' => ['yes', true],
-        ];
-    }
-
-    public function testBuildContentPathAppendsTeacherParameterOnlyWhenEnabled(): void
-    {
-        $module = new TestableModule();
-
-        $off = $this->makeMedia('a.elpx', 1, ['exelearning_teacher_mode_visible' => '0']);
-        $this->assertSame('/exelearning/content/h1/index.html', $module->callBuildContentPath('h1', $off));
-
-        $on = $this->makeMedia('a.elpx', 1, ['exelearning_teacher_mode_visible' => '1']);
-        $this->assertSame(
-            '/exelearning/content/h1/index.html?exe-teacher=1',
-            $module->callBuildContentPath('h1', $on)
-        );
-    }
-
-    public function testDeleteDirectoryRemovesNestedContent(): void
-    {
-        $root = $this->makeTmpDir();
-        mkdir($root . '/a/b', 0777, true);
-        file_put_contents($root . '/a/top.txt', 'x');
-        file_put_contents($root . '/a/b/deep.txt', 'y');
-
-        $module = new TestableModule();
-        $module->callDeleteDirectory($root . '/a');
-
-        $this->assertDirectoryDoesNotExist($root . '/a');
-    }
-
-    public function testDeleteDirectoryIgnoresMissingPath(): void
-    {
-        $module = new TestableModule();
-        $module->callDeleteDirectory($this->makeTmpDir() . '/never-created');
-        $this->addToAssertionCount(1);
-    }
 
     public function testGetExeLearningItemIdsReturnsIntegers(): void
     {
@@ -776,182 +673,6 @@ class ModuleTest extends TestCase
         ob_start();
         $module->handleAdminMediaShow(new Event('view.show.after', $view));
         $this->assertSame('', (string) ob_get_clean());
-    }
-
-    // ------------------------------------ public item show (compatibility shim)
-
-    /**
-     * A container carrying the resolved resource-page block configuration.
-     *
-     * @param array<string, mixed> $extra
-     */
-    private function omekaWithBlocks(
-        ?FakeResourcePageBlockLayoutManager $blocks = null,
-        array $extra = []
-    ): TestServiceLocator {
-        return new TestServiceLocator(array_merge([
-            'Omeka\Site\ThemeManager' => new FakeThemeManager(),
-            'Omeka\ResourcePageBlockLayoutManager' => $blocks ?? new FakeResourcePageBlockLayoutManager(),
-        ], $extra));
-    }
-
-    /**
-     * @param array<int, object> $media
-     */
-    private function itemView(array $media): PhpRenderer
-    {
-        $view = new PhpRenderer();
-        $view->item = new FakeItem($media);
-
-        return $view;
-    }
-
-    private function renderableElpx(int $id = 1): object
-    {
-        $media = $this->makeMedia('course.elpx', $id);
-        $media->rendered = '<div class="exelearning-viewer" data-media-id="' . $id . '"></div>';
-
-        return $media;
-    }
-
-    /**
-     * @param mixed $services
-     */
-    private function runPublicItemShow($services, PhpRenderer $view): string
-    {
-        $module = new TestableModule($services);
-
-        ob_start();
-        $module->handlePublicItemShow(new Event('view.show.after', $view));
-
-        return (string) ob_get_clean();
-    }
-
-    public function testStaysSilentWhenMediaEmbedsIsInTheResolvedConfiguration(): void
-    {
-        // The default resolved configuration carries mediaEmbeds, so core calls
-        // $media->render() and the shim must not render a second viewer.
-        $exe = $this->renderableElpx();
-
-        $output = $this->runPublicItemShow($this->omekaWithBlocks(), $this->itemView([$exe]));
-
-        $this->assertSame('', $output);
-        $this->assertSame(0, $exe->renderCalls);
-    }
-
-    public function testRendersTheViewerWhenMediaEmbedsWasRemoved(): void
-    {
-        // The case mere helper- or service-existence detection got wrong: the
-        // block is always registered, but this site's resolved configuration no
-        // longer lists it, so core renders no media and, without this shim, the
-        // viewer would vanish. This is the only reason the shim still exists.
-        $exe = $this->renderableElpx();
-
-        $output = $this->runPublicItemShow(
-            $this->omekaWithBlocks(FakeResourcePageBlockLayoutManager::withoutMediaEmbeds()),
-            $this->itemView([$exe])
-        );
-
-        $this->assertSame($exe->rendered, $output);
-        $this->assertSame(1, $exe->renderCalls);
-    }
-
-    public function testHonoursMediaEmbedsDeclaredInANonMainRegion(): void
-    {
-        // Themes may declare their own regions; a block anywhere in the item
-        // page still means core renders the media.
-        $exe = $this->renderableElpx();
-
-        $output = $this->runPublicItemShow(
-            $this->omekaWithBlocks(FakeResourcePageBlockLayoutManager::withMediaEmbedsInAnotherRegion()),
-            $this->itemView([$exe])
-        );
-
-        $this->assertSame('', $output);
-        $this->assertSame(0, $exe->renderCalls);
-    }
-
-    public function testResolvedBlocksAreReadForTheSitesCurrentTheme(): void
-    {
-        // getResourcePageBlocks() resolves per theme, so the shim must hand it
-        // the theme the site is actually running.
-        $theme = new class {
-            public function getSettingsKey(): string
-            {
-                return 'theme_settings_custom';
-            }
-        };
-        $blocks = FakeResourcePageBlockLayoutManager::withoutMediaEmbeds();
-        $services = new TestServiceLocator([
-            'Omeka\Site\ThemeManager' => new FakeThemeManager($theme),
-            'Omeka\ResourcePageBlockLayoutManager' => $blocks,
-        ]);
-
-        $this->runPublicItemShow($services, $this->itemView([$this->renderableElpx()]));
-
-        $this->assertSame($theme, $blocks->themeReceived);
-    }
-
-    public function testTheShimRendersOnlyExeLearningMedia(): void
-    {
-        $exe = $this->renderableElpx(1);
-        $other = $this->makeMedia('photo.png', 2);
-        $other->rendered = '<img src="photo.png">';
-        $zip = $this->makeMedia('archive.zip', 3);
-        $zip->rendered = '<a href="archive.zip">archive</a>';
-
-        $output = $this->runPublicItemShow(
-            $this->omekaWithBlocks(FakeResourcePageBlockLayoutManager::withoutMediaEmbeds()),
-            $this->itemView([$exe, $other, $zip])
-        );
-
-        $this->assertSame($exe->rendered, $output);
-        $this->assertSame(0, $other->renderCalls);
-        $this->assertSame(0, $zip->renderCalls, 'a plain ZIP is not this module\'s media');
-    }
-
-    public function testTheShimNeverWritesDuringARender(): void
-    {
-        // Extraction used to run inline here, mutating state in a GET request.
-        $elp = new FakeElpFileService(null, false, false, false);
-
-        $output = $this->runPublicItemShow(
-            $this->omekaWithBlocks(FakeResourcePageBlockLayoutManager::withoutMediaEmbeds(), [
-                'Omeka\Logger' => new Logger(),
-                ElpFileService::class => $elp,
-            ]),
-            $this->itemView([$this->renderableElpx()])
-        );
-
-        $this->assertNotSame('', $output, 'the viewer still renders');
-        $this->assertSame(0, $elp->processCalls, 'no extraction may happen on a public GET');
-        $this->assertSame([], $elp->cleanedHashes);
-    }
-
-    public function testTheShimStaysSilentWhenItCannotTellWhoRenders(): void
-    {
-        // If the configuration cannot be read, rendering nothing is safer than
-        // rendering the viewer underneath the one core already produced.
-        $exe = $this->renderableElpx();
-        $services = new TestServiceLocator([
-            'Omeka\Site\ThemeManager' => new class {
-                public function getCurrentTheme()
-                {
-                    throw new \RuntimeException('no theme in this context');
-                }
-            },
-            'Omeka\ResourcePageBlockLayoutManager' => new FakeResourcePageBlockLayoutManager(),
-        ]);
-
-        $this->assertSame('', $this->runPublicItemShow($services, $this->itemView([$exe])));
-        $this->assertSame(0, $exe->renderCalls);
-    }
-
-    public function testTheShimIgnoresAnItemlessView(): void
-    {
-        $view = new PhpRenderer();
-
-        $this->assertSame('', $this->runPublicItemShow($this->omekaWithBlocks(), $view));
     }
 
     public function testHandleViewLayoutInjectsScriptsOnAdminRoutes(): void
@@ -1212,6 +933,27 @@ class ModuleTest extends TestCase
         $this->assertStringContainsString('extraction failed', implode("\n", $errors));
     }
 
+    /**
+     * Build the event Omeka actually triggers for a delete.
+     *
+     * `Api\Manager::finalize()` constructs it as
+     * `['request' => $request, 'response' => $response]`, and
+     * `AbstractEntityAdapter::delete()` returns `new Response($entity)`, so the
+     * removed entity is the response content. The earlier tests here passed an
+     * `entity` parameter instead -- a shape `Api\Manager::initialize()` never
+     * produces for `api.delete.pre` -- which is why they stayed green while the
+     * cleanup did nothing against real Omeka.
+     *
+     * @param mixed $entity
+     */
+    private function deleteEvent($entity): Event
+    {
+        return new Event('api.delete.post', null, [
+            'request' => new FakeApiRequest([]),
+            'response' => new FakeApiResponse($entity),
+        ]);
+    }
+
     public function testHandleMediaDeleteRemovesTheExtractionDirectory(): void
     {
         // The extraction root belongs to ElpFileService, which derives it from
@@ -1225,9 +967,33 @@ class ModuleTest extends TestCase
         ]));
 
         $entity = new FakeMediaEntity('course.elpx', 21, ['exelearning_extracted_hash' => 'hash-1']);
-        $module->handleMediaDelete(new Event('api.delete.pre', null, ['entity' => $entity]));
+        $module->handleMediaDelete($this->deleteEvent($entity));
 
         $this->assertSame(['hash-1'], $elp->cleanedHashes);
+    }
+
+    public function testHandleMediaDeleteReadsTheEntityFromTheResponseNotAnEntityParam(): void
+    {
+        // Pin the contract: an `entity` parameter is what `api.delete.pre`
+        // would have needed and never had. If the listener ever drifts back to
+        // reading one, this stays empty and fails.
+        $elp = new FakeElpFileService(null, false, false, true);
+        $module = new TestableModule(new TestServiceLocator([
+            'Omeka\Logger' => new Logger(),
+            ElpFileService::class => $elp,
+        ]));
+
+        $entity = new FakeMediaEntity('course.elpx', 21, ['exelearning_extracted_hash' => 'hash-1']);
+        $module->handleMediaDelete(new Event('api.delete.post', null, [
+            'request' => new FakeApiRequest([]),
+            'response' => new FakeApiResponse($entity),
+        ]));
+        $this->assertSame(['hash-1'], $elp->cleanedHashes);
+
+        // The shape Omeka never sends must clean nothing rather than fatal.
+        $elp->cleanedHashes = [];
+        $module->handleMediaDelete(new Event('api.delete.post', null, ['entity' => $entity]));
+        $this->assertSame([], $elp->cleanedHashes);
     }
 
     public function testHandleMediaDeleteCleansUpLegacyZipPackagesToo(): void
@@ -1241,12 +1007,12 @@ class ModuleTest extends TestCase
         ]));
 
         $entity = new FakeMediaEntity('legacy.zip', 25, ['exelearning_extracted_hash' => 'hash-z']);
-        $module->handleMediaDelete(new Event('api.delete.pre', null, ['entity' => $entity]));
+        $module->handleMediaDelete($this->deleteEvent($entity));
 
         $this->assertSame(['hash-z'], $elp->cleanedHashes);
     }
 
-    public function testHandleMediaDeleteIgnoresIrrelevantEntities(): void
+    public function testHandleMediaDeleteIgnoresIrrelevantResponses(): void
     {
         $logger = new Logger();
         $elp = new FakeElpFileService(null, false, false, true);
@@ -1255,15 +1021,13 @@ class ModuleTest extends TestCase
             ElpFileService::class => $elp,
         ]));
 
-        // No entity at all.
-        $module->handleMediaDelete(new Event('api.delete.pre', null, ['entity' => null]));
-        // A media that was never extracted by this module.
-        $module->handleMediaDelete(new Event('api.delete.pre', null, [
-            'entity' => new FakeMediaEntity('photo.png', 22, []),
-        ]));
-        $module->handleMediaDelete(new Event('api.delete.pre', null, [
-            'entity' => new FakeMediaEntity('course.elpx', 23, []),
-        ]));
+        // No response at all.
+        $module->handleMediaDelete(new Event('api.delete.post', null, ['request' => new FakeApiRequest([])]));
+        // A response carrying nothing.
+        $module->handleMediaDelete($this->deleteEvent(null));
+        // Media this module never extracted.
+        $module->handleMediaDelete($this->deleteEvent(new FakeMediaEntity('photo.png', 22, [])));
+        $module->handleMediaDelete($this->deleteEvent(new FakeMediaEntity('course.elpx', 23, [])));
 
         $this->assertSame([], $elp->cleanedHashes);
         $this->assertSame([], array_filter($logger->getMessages(), function (array $m) {
@@ -1282,7 +1046,7 @@ class ModuleTest extends TestCase
                 throw new \RuntimeException('entity detached');
             }
         };
-        $module->handleMediaDelete(new Event('api.delete.pre', null, ['entity' => $entity]));
+        $module->handleMediaDelete($this->deleteEvent($entity));
 
         $this->assertStringContainsString('entity detached', $this->lastMessage($logger, 'err'));
     }

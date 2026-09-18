@@ -28,12 +28,6 @@ class Module extends AbstractModule
     /** Setting holding the whitelist entries this module added at install. */
     const SETTING_WHITELIST_ADDITIONS = 'exelearning_whitelist_additions';
 
-    /** Resolves which blocks a site's resource pages actually render. */
-    const SERVICE_RESOURCE_PAGE_BLOCKS = 'Omeka\\ResourcePageBlockLayoutManager';
-
-    /** Core's block layout that calls $media->render() on an item page. */
-    const MEDIA_EMBEDS_BLOCK = 'mediaEmbeds';
-
     /**
      * Upload types earlier releases added that this version withdraws.
      *
@@ -41,6 +35,14 @@ class Module extends AbstractModule
      * even though their provenance was never recorded.
      */
     const LEGACY_WHITELIST_ADDITIONS = ['application/octet-stream'];
+
+    /**
+     * Last published release that widened the whitelist without recording it.
+     *
+     * The withdrawal in upgrade() runs only for installations coming from this
+     * version or earlier, so it happens exactly once.
+     */
+    const LAST_VERSION_WITH_LEGACY_WHITELIST = '4.0.5';
 
     /**
      * What an .elpx upload needs, and nothing else.
@@ -181,11 +183,21 @@ class Module extends AbstractModule
     public function upgrade($oldVersion, $newVersion, ServiceLocatorInterface $serviceLocator)
     {
         $this->removeEditorInstallerSettings($serviceLocator);
-        $this->dropLegacyWhitelistAdditions($serviceLocator);
+
+        // Only when crossing the boundary. Running this on every future upgrade
+        // would keep re-removing a value an administrator may have deliberately
+        // re-added afterwards, which contradicts the whole reason removing it is
+        // defensible: that the choice becomes theirs.
+        if (version_compare((string) $oldVersion, self::LAST_VERSION_WITH_LEGACY_WHITELIST, '<=')) {
+            $this->dropLegacyWhitelistAdditions($serviceLocator);
+        }
     }
 
     /**
      * Withdraw the over-broad upload type earlier releases added.
+     *
+     * Called once, from upgrade(), for installations coming from
+     * self::LAST_VERSION_WITH_LEGACY_WHITELIST or earlier.
      *
      * Every released version up to and including 4.0.5 added
      * `application/octet-stream` to the installation-wide
@@ -199,7 +211,8 @@ class Module extends AbstractModule
      * because the type is not an Omeka default, matches any unidentified binary,
      * and is not needed for `.elpx`. An administrator who wants it can add it
      * back in Omeka's own settings, where it is one checkbox and where the
-     * decision is recorded as theirs.
+     * decision is recorded as theirs -- and where a later upgrade will not
+     * quietly undo it again.
      *
      * Only this one value is touched. `application/zip`,
      * `application/x-zip-compressed`, the `zip` and `elpx` extensions and every
@@ -282,10 +295,14 @@ class Module extends AbstractModule
             [$this, 'handleMediaCreate']
         );
 
-        // Listen for media deletion to clean up extracted content
+        // Listen for media deletion to clean up extracted content. This is
+        // `.post`, not `.pre`: Api\Manager::initialize() gives a `.pre` event
+        // only a `request`, so the entity this needs is not there, while
+        // finalize() passes the `response` whose content is the removed entity.
+        // It also means the files go only after the delete actually succeeded.
         $sharedEventManager->attach(
             'Omeka\Api\Adapter\MediaAdapter',
-            'api.delete.pre',
+            'api.delete.post',
             [$this, 'handleMediaDelete']
         );
 
@@ -301,13 +318,6 @@ class Module extends AbstractModule
             '*',
             'view.layout',
             [$this, 'handleViewLayout']
-        );
-
-        // Compatibility shim for item pages that never call $media->render().
-        $sharedEventManager->attach(
-            'Omeka\Controller\Site\Item',
-            'view.show.after',
-            [$this, 'handlePublicItemShow']
         );
 
         // Expose screenshot URL through the standard Omeka media JSON-LD API.
@@ -351,79 +361,6 @@ class Module extends AbstractModule
         }
 
         $event->setParam('jsonLd', $jsonLd);
-    }
-
-    /**
-     * Render eXeLearning media on item pages that core would otherwise skip.
-     *
-     * The viewer itself lives in ExeLearningRenderer, reached through
-     * $media->render(); this hook only decides whether the page is one where
-     * core never calls it. See itemPageEmbedsMedia() for how that is
-     * established: whether `mediaEmbeds` survives in the site's resolved
-     * resource-page block configuration. On a page that dropped the block the
-     * item would otherwise show no viewer at all; everywhere else this stays
-     * silent so the viewer is never rendered twice.
-     *
-     * Read-only by contract: no extraction, no media data written. Repairing an
-     * unprocessed package belongs to the admin view, not to a public GET.
-     *
-     * @param Event $event
-     */
-    public function handlePublicItemShow(Event $event)
-    {
-        $view = $event->getTarget();
-        $item = $view->item;
-
-        if (!$item || $this->itemPageEmbedsMedia()) {
-            return;
-        }
-
-        foreach ($item->media() as $media) {
-            if ($this->isExeLearningFile($media)) {
-                echo $media->render();
-            }
-        }
-    }
-
-    /**
-     * Whether this item page already renders its media itself.
-     *
-     * The block being registered is not the question -- it always is. The
-     * question is whether this site's *resolved* configuration still lists it,
-     * because `Manager::getResourcePageBlocks()` prefers the site
-     * administrator's saved blocks, then the theme's `resource_page_blocks`
-     * from its INI file, and only falls back to
-     * `RESOURCE_PAGE_BLOCKS_DEFAULT` when neither is set. An administrator or a
-     * theme may drop `mediaEmbeds`, and then core never calls
-     * `$media->render()` on the item page and the viewer would vanish.
-     *
-     * This mirrors what `Omeka\Service\ViewHelper\ResourcePageBlocksFactory`
-     * does to build the helper, so it reads the same configuration core renders
-     * from -- without rendering anything or inspecting generated markup.
-     *
-     * @return bool
-     */
-    protected function itemPageEmbedsMedia(): bool
-    {
-        try {
-            $services = $this->getServiceLocator();
-            $theme = $services->get('Omeka\Site\ThemeManager')->getCurrentTheme();
-            $blocks = $services->get(self::SERVICE_RESOURCE_PAGE_BLOCKS)->getResourcePageBlocks($theme);
-
-            // Blocks are grouped by region, and a theme may declare regions
-            // beyond "main", so any region carrying the block counts.
-            foreach ($blocks['items'] ?? [] as $regionBlocks) {
-                if (is_array($regionBlocks) && in_array(self::MEDIA_EMBEDS_BLOCK, $regionBlocks, true)) {
-                    return true;
-                }
-            }
-
-            return false;
-        } catch (\Throwable $e) {
-            // Without a usable container we cannot tell; rendering nothing is
-            // safer than rendering the viewer twice.
-            return true;
-        }
     }
 
     /**
@@ -777,8 +714,18 @@ JS
     }
 
     /**
-     * Handle media deletion event.
-     * Clean up extracted content.
+     * Handle media deletion event: clean up extracted content.
+     *
+     * Bound to `api.delete.post`. `Omeka\Api\Manager::initialize()` builds the
+     * `.pre` event with `['request' => $request]` and nothing else, so an
+     * `entity` parameter never arrives there -- reading one was why this cleanup
+     * silently did nothing. `finalize()` builds the `.post` event with
+     * `['request' => $request, 'response' => $response]`, and
+     * `AbstractEntityAdapter::delete()` returns `new Response($entity)` after
+     * the flush, so the removed entity is the response content. `finalize()`
+     * transforms that content only after the event has been triggered, and
+     * `batchDelete()` finalizes each subresponse, so this fires for batch
+     * deletes too.
      *
      * @param Event $event
      */
@@ -788,9 +735,13 @@ JS
         $logger = $services->get('Omeka\Logger');
 
         try {
-            // Get the entity directly from the event, not via API
-            $entity = $event->getParam('entity');
-            if (!$entity) {
+            $response = $event->getParam('response');
+            if (!$response || !method_exists($response, 'getContent')) {
+                return;
+            }
+
+            $entity = $response->getContent();
+            if (!$entity || !method_exists($entity, 'getData')) {
                 return;
             }
 
@@ -802,10 +753,9 @@ JS
 
             // Delegate to the service: it owns the extraction root, which is
             // derived from Omeka's files directory. This used to delete
-            // <module>/data/exelearning/<hash>, a path nothing ever wrote to, so
-            // every deleted media left its extracted package on disk.
+            // <module>/data/exelearning/<hash>, a path nothing ever wrote to.
             $services->get(Service\ElpFileService::class)->cleanupMediaByHash($hash);
-            $logger->info(sprintf('ExeLearning: Cleaned up extracted content for media %d', $entity->getId()));
+            $logger->info(sprintf('ExeLearning: Cleaned up extracted content for hash %s', $hash));
         } catch (\Throwable $e) {
             $logger->err(sprintf(
                 'ExeLearning: Failed to cleanup media: %s',
@@ -815,111 +765,11 @@ JS
     }
 
     /**
-     * Recursively delete a directory.
-     *
-     * @param string $dir
-     */
-    protected function deleteDirectory(string $dir): void
-    {
-        if (!is_dir($dir)) {
-            return;
-        }
-
-        $files = array_diff(scandir($dir), ['.', '..']);
-
-        foreach ($files as $file) {
-            $path = $dir . '/' . $file;
-            if (is_dir($path)) {
-                $this->deleteDirectory($path);
-            } else {
-                @unlink($path);
-            }
-        }
-
-        @rmdir($dir);
-    }
-
-    /**
      * Check if a media item is an eXeLearning file.
      *
      * @param mixed $media
      * @return bool
      */
-    /**
-     * Build an absolute content proxy URL for the given hash.
-     *
-     * Derives the base path from the actual request URI path so that the
-     * playground prefix (/playground/{uuid}/php83/) is correctly included
-     * even in PHP-WASM environments where $_SERVER['SCRIPT_NAME'] does not
-     * contain it (making getBasePath() unreliable).
-     */
-    protected function buildContentUrl(string $hash): string
-    {
-        $request = $this->getServiceLocator()->get('Request');
-        $uri = $request->getUri();
-        $scheme = $uri->getScheme();
-        $port = $uri->getPort();
-        $serverUrl = $scheme . '://' . $uri->getHost();
-        if ($port && !(($scheme === 'http' && $port == 80) || ($scheme === 'https' && $port == 443))) {
-            $serverUrl .= ':' . $port;
-        }
-        $basePath = $this->extractBasePath($uri->getPath());
-        return $serverUrl . $basePath . '/exelearning/content/' . $hash . '/index.html';
-    }
-
-    /**
-     * Derive the Omeka base path from the actual request URI path.
-     *
-     * Strips everything from the first known Omeka route segment onward
-     * (/admin/, /s/, /api/). This is reliable in PHP-WASM playgrounds where
-     * the full URL path (e.g. /playground/{uuid}/php83/admin/...) is preserved
-     * in the request URI even when $_SERVER['SCRIPT_NAME'] is not.
-     */
-    protected function extractBasePath(string $uriPath): string
-    {
-        foreach (['/admin/', '/s/', '/api/'] as $marker) {
-            $pos = strpos($uriPath, $marker);
-            if ($pos !== false) {
-                return substr($uriPath, 0, $pos);
-            }
-        }
-        return '';
-    }
-
-    /**
-     * Check whether teachers may reveal teacher-only content for this media.
-     *
-     * eXeLearning exports hide teacher content by default; it is revealed via
-     * the ?exe-teacher=1 URL parameter. This per-media setting controls whether
-     * the module is allowed to add that parameter for teacher viewers.
-     */
-    protected function isTeacherModeVisible($media): bool
-    {
-        $data = $media->mediaData();
-        if (!isset($data['exelearning_teacher_mode_visible'])) {
-            return false;
-        }
-
-        $value = $data['exelearning_teacher_mode_visible'];
-        return !in_array((string) $value, ['0', 'false', 'no'], true);
-    }
-
-    /**
-     * Build the relative content path for a media. The per-media "Show teacher layer
-     * selector" setting alone controls it: when on, the package's ?exe-teacher=1
-     * parameter is appended so the teacher-layer selector is available to every viewer;
-     * otherwise the default (student) view is served with no parameter.
-     */
-    protected function buildContentPath(string $hash, $media): string
-    {
-        $contentPath = '/exelearning/content/' . $hash . '/index.html';
-        if ($this->isTeacherModeVisible($media)) {
-            $contentPath .= '?exe-teacher=1';
-        }
-
-        return $contentPath;
-    }
-
     protected function isExeLearningFile($media): bool
     {
         return Service\ElpFileService::isExeLearningMedia($media);

@@ -96,11 +96,27 @@ renders a notice.
 
 ### Deletion
 
-`Module::handleMediaDelete()` reads the hash from the entity and calls
+The listener moves from `api.delete.pre` to `api.delete.post`.
+`Omeka\Api\Manager::initialize()` builds the `.pre` event with
+`['request' => $request]` and nothing else, so the `entity` parameter this code
+read was never there and the cleanup silently did nothing on real Omeka — the
+module's own `omeka-s-api-and-adapters` skill already said so.
+`finalize()` builds the `.post` event with
+`['request' => $request, 'response' => $response]`, and
+`AbstractEntityAdapter::delete()` returns `new Response($entity)` after the
+flush, so the removed entity is the response content; `finalize()` transforms
+that content only after triggering the event, and `batchDelete()` finalizes each
+subresponse, so batch deletes are covered too. Running after the delete has
+succeeded is also better ordering: files go only once authorization and the
+flush have passed.
+
+`Module::handleMediaDelete()` reads the hash from that entity and calls
 `ElpFileService::cleanupMediaByHash()`, a hash-taking sibling of the existing
-`cleanupMedia()` — `api.delete.pre` hands the module an entity, which has no
-representation methods. `getDataPath()` and `createDataDirectory()` are removed
-with the directory they created.
+`cleanupMedia()`. `getDataPath()`, `createDataDirectory()` and `deleteDirectory()`
+are removed with the directory they served, along with `buildContentUrl()`,
+`extractBasePath()`, `isTeacherModeVisible()` and `buildContentPath()` — copies
+that became unreachable once the public partial and listener went, and which live
+on in the controllers and the renderer that actually use them.
 
 ### Renderer
 
@@ -123,39 +139,30 @@ The `view.show.after` listener survives as a compatibility shim — see
 [ADR-39-01](../../adr/ADR-39-01-render-media-through-the-media-renderer-manager.md)
 and the next section.
 
-### Supported Omeka narrowed to `^4.0.0`
+### Supported Omeka narrowed to `^4.0.0`, and the public listener deleted
 
 `config/module.ini` drops `^3.0.0`. Omeka S 3 does not embed media on item pages
-unless an administrator enables `item_media_embed`, so every S 3 site needed the
-compatibility listener, and supporting it meant a second branch in the detection
-below. Narrowing removes that branch.
+unless an administrator enables `item_media_embed`, so every S 3 site needed a
+public compatibility listener. That was the only reason one existed, so dropping
+S 3 lets it go entirely — which is what
+`exelearning/exelearning#2443` asked for.
 
 The PHP floor is unaffected and `composer.json:24` stays `>=7.4`: Omeka S 4.0 and
 4.1 declare `"php": ">=7.4"`, and only 4.2 raises it to `">=8.1"`.
 
-### Does this page already render its media?
+An intermediate design kept the listener for S 4 sites that removed
+`mediaEmbeds`, deciding by reading the resolved block configuration. It was
+implemented and withdrawn, for two reasons recorded in
+[ADR-39-01](../../adr/ADR-39-01-render-media-through-the-media-renderer-manager.md):
+removing `mediaEmbeds` is the supported way to say "do not embed media here", so
+overriding it for one media type is wrong; and the configuration cannot answer
+the question anyway, because a region only renders when the template invokes it
+(`ResourcePageBlocks::__invoke($resource, $regionName = 'main')`), so a block
+configured in an uninvoked region is configured and never rendered.
 
-`Module::itemPageEmbedsMedia()` answers that, and takes the answer from Omeka's
-resolved configuration. It mirrors what
-`Omeka\Service\ViewHelper\ResourcePageBlocksFactory` does to build the helper —
-`ThemeManager::getCurrentTheme()`, then `Manager::getResourcePageBlocks($theme)`
-— and looks for `mediaEmbeds` in any region of `items`.
-
-With one supported core it is a single method with no version probe, and it does
-not need the view at all.
-
-Checking that the helper or the service merely *exists* is not enough, and an
-earlier draft of this change made that mistake.
-`Manager::getResourcePageBlocks()` prefers the administrator's saved blocks,
-then the theme's `resource_page_blocks` INI section, and only then
-`RESOURCE_PAGE_BLOCKS_DEFAULT`; a site or theme that drops `mediaEmbeds` gets no
-media on its item pages, and the viewer would have vanished exactly as it does
-on an untreated S 3 site.
-
-Blocks are keyed by region and a theme may declare regions beyond `main`, so any
-region counts. Nothing is rendered to find this out and no generated markup is
-inspected. On any failure it reports "already embedded" and stays silent,
-because a missing viewer is a smaller fault than two stacked ones.
+What remains is no inference at all: `handlePublicItemShow()`,
+`itemPageEmbedsMedia()`, both service constants and the two test doubles behind
+them are gone.
 
 ### Iframe sandbox — out of scope, see PR #21
 
@@ -240,8 +247,13 @@ never took it back. Narrowing `install()` alone would therefore only ever reach
 fresh installations, and every upgraded site would keep the value forever —
 defeating half of `exelearning/exelearning#2444`.
 
-`upgrade()` now calls `dropLegacyWhitelistAdditions()`, which removes exactly
-that one value from `media_type_whitelist` and nothing else.
+`upgrade()` now calls `dropLegacyWhitelistAdditions()` — but only when
+`version_compare($oldVersion, Module::LAST_VERSION_WITH_LEGACY_WHITELIST, '<=')`,
+i.e. once, on the upgrade that crosses the boundary. Running it unconditionally
+would re-remove the value on every future upgrade, quietly undoing an
+administrator who had deliberately re-added it, which contradicts the very
+argument that makes removing it defensible. It removes exactly that one value
+from `media_type_whitelist` and nothing else.
 
 The provenance problem is real and unsolvable: those releases recorded nothing,
 so whether the site already allowed `application/octet-stream` before installing
@@ -299,12 +311,13 @@ extraction no longer runs during a GET. For `.elpx` the admin view repairs them.
 - `ExeLearningRendererTest` asserts `render()` returns non-empty HTML containing
   `exelearning-viewer` — the regression test the upstream issue asks for — plus
   the scoped URL rewriting and the admin-only edit button.
-- `ModuleTest` covers the listener against a modelled resource-page
-  configuration, not a version flag: `mediaEmbeds` present, removed, and
-  declared in a non-`main` region; that the blocks are resolved for the site's
-  current theme; that an unreadable configuration keeps it silent; that only
-  eXeLearning media render; and that no extraction or write happens during the
-  render.
+- `ModuleTest::testAttachListenersRegistersEveryOmekaHook` pins the listener
+  roster, so the absence of a public `view.show.after` hook is asserted rather
+  than assumed.
+- `ModuleTest` covers media deletion against the event Omeka actually triggers
+  (`api.delete.post`, carrying `request` and `response`), including an explicit
+  test that the `entity` parameter shape — which `api.delete.pre` never
+  provides — cleans nothing.
 - `ModuleTest` covers the upgrade: `application/octet-stream` withdrawn,
   unrelated entries and site-wide `zip` preserved, an empty whitelist left
   empty, no ownership claimed over pre-existing values, a later uninstall

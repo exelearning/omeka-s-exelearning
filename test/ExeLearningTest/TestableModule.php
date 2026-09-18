@@ -42,37 +42,6 @@ class TestableModule extends Module
         return $this->getExeLearningItemIds();
     }
 
-    public function callDeleteDirectory(string $dir): void
-    {
-        $this->deleteDirectory($dir);
-    }
-
-    public function callBuildContentUrl(string $hash): string
-    {
-        return $this->buildContentUrl($hash);
-    }
-
-    public function callExtractBasePath(string $uriPath): string
-    {
-        return $this->extractBasePath($uriPath);
-    }
-
-    /**
-     * @param mixed $media
-     */
-    public function callIsTeacherModeVisible($media): bool
-    {
-        return $this->isTeacherModeVisible($media);
-    }
-
-    /**
-     * @param mixed $media
-     */
-    public function callBuildContentPath(string $hash, $media): string
-    {
-        return $this->buildContentPath($hash, $media);
-    }
-
     /**
      * @param mixed $media
      */
