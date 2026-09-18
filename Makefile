@@ -110,7 +110,8 @@ build-editor: check-bun fetch-editor-source
 	fi; \
 	echo "Editor version input: $${APP_VER:-(default -> alpha)}"; \
 	cd $(EDITOR_SUBMODULE_PATH) && bun install && OUTPUT_DIR=$(EDITOR_OUTPUT_DIR) APP_VERSION="$$APP_VER" bun run build:static
-	@# Create symlink for Omeka asset serving
+	@# Local-only convenience so Omeka can serve the editor from asset/.
+	@# Do not ship this symlink: zip follows it and would duplicate dist/static/.
 	@rm -f asset/static
 	@ln -s ../dist/static asset/static
 	@echo ""
@@ -281,10 +282,20 @@ package:
 	rm -rf /tmp/exelearning-omeka-package
 	mkdir -p /tmp/exelearning-omeka-package/ExeLearning
 	rsync -av --exclude-from=.distignore ./ /tmp/exelearning-omeka-package/ExeLearning/
+	@# zip adds to an existing archive, so a stale ExeLearning-VERSION.zip would
+	@# keep files that a new .distignore rule excludes (including a duplicated
+	@# editor under asset/static/).
+	rm -f "$(CURDIR)/ExeLearning-$(VERSION).zip"
 	cd /tmp/exelearning-omeka-package && zip -qr "$(CURDIR)/ExeLearning-$(VERSION).zip" ExeLearning
 	rm -rf /tmp/exelearning-omeka-package
 	@echo "Restoring version to 0.0.0 in module.ini..."
 	$(SED_INPLACE) 's/^\([[:space:]]*version[[:space:]]*=[[:space:]]*\).*$$/\1"0.0.0"/' config/module.ini
+	@python3 -c 'import sys, zipfile; z = zipfile.ZipFile(sys.argv[1]); sys.exit(1 if any(n.startswith("ExeLearning/asset/static") for n in z.namelist()) else 0)' \
+		"$(CURDIR)/ExeLearning-$(VERSION).zip" || { \
+		echo "Error: release ZIP contains asset/static/; zip followed the symlink to dist/static/ and would ship the editor twice. Keep /asset/static in .distignore." >&2; \
+		rm -f "$(CURDIR)/ExeLearning-$(VERSION).zip"; \
+		exit 1; \
+	}
 	@echo "Package created: ExeLearning-$(VERSION).zip"
 
 # ============================================================================
