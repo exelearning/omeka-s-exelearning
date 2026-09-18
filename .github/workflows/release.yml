@@ -1,6 +1,12 @@
 ---
 name: Release
 
+# The module version and the bundled editor version are independent. The
+# module version comes from the pushed tag (or the `release_tag` input); the
+# editor is built from the tag recorded in `.editor-version` unless the
+# dispatch inputs override it. This is what lets a module-only fix ship as
+# `v4.0.6-rc.1` on top of editor v4.0.5 before editor v4.0.6 exists.
+
 on:
   push:
     tags:
@@ -8,17 +14,16 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "Release label for package name (e.g. 1.2.3 or 1.2.3-beta)"
-        required: false
-        default: ""
+        description: "Module version to publish, e.g. 4.0.6 or 4.0.6-rc.1 (the git tag is v<version>)"
+        required: true
       editor_repo_url:
         description: "Editor source repository URL"
         required: false
         default: "https://github.com/exelearning/exelearning.git"
       editor_ref:
-        description: "Editor ref value (main, branch name, or tag)"
+        description: "Editor ref to bundle (branch or tag). Empty = the tag recorded in .editor-version"
         required: false
-        default: "main"
+        default: ""
       editor_ref_type:
         description: "Type of editor ref"
         required: false
@@ -41,25 +46,41 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
 
-      - name: Set environment variables
+      - name: Resolve module and editor versions
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_RELEASE_TAG: ${{ github.event.inputs.release_tag }}
+          INPUT_EDITOR_REPO_URL: ${{ github.event.inputs.editor_repo_url }}
+          INPUT_EDITOR_REF: ${{ github.event.inputs.editor_ref }}
+          INPUT_EDITOR_REF_TYPE: ${{ github.event.inputs.editor_ref_type }}
         run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
-            RAW_TAG="${GITHUB_REF##*/}"
-            VERSION_TAG="${RAW_TAG#v}"
-            echo "RELEASE_TAG=${VERSION_TAG}" >> $GITHUB_ENV
-            echo "EXELEARNING_EDITOR_REPO_URL=https://github.com/exelearning/exelearning.git" >> $GITHUB_ENV
-            echo "EXELEARNING_EDITOR_REF=${RAW_TAG}" >> $GITHUB_ENV
-            echo "EXELEARNING_EDITOR_REF_TYPE=auto" >> $GITHUB_ENV
+          if [ "$EVENT_NAME" = "push" ]; then
+            TAG_NAME="$GITHUB_REF_NAME"
+            EDITOR_REPO_URL="https://github.com/exelearning/exelearning.git"
+            EDITOR_REF=""
+            EDITOR_REF_TYPE="tag"
           else
-            INPUT_RELEASE="${{ github.event.inputs.release_tag }}"
-            if [ -z "$INPUT_RELEASE" ]; then
-              INPUT_RELEASE="manual-$(date +%Y%m%d)-${GITHUB_SHA::7}"
-            fi
-            echo "RELEASE_TAG=${INPUT_RELEASE}" >> $GITHUB_ENV
-            echo "EXELEARNING_EDITOR_REPO_URL=${{ github.event.inputs.editor_repo_url }}" >> $GITHUB_ENV
-            echo "EXELEARNING_EDITOR_REF=${{ github.event.inputs.editor_ref }}" >> $GITHUB_ENV
-            echo "EXELEARNING_EDITOR_REF_TYPE=${{ github.event.inputs.editor_ref_type }}" >> $GITHUB_ENV
+            TAG_NAME="v${INPUT_RELEASE_TAG#v}"
+            EDITOR_REPO_URL="$INPUT_EDITOR_REPO_URL"
+            EDITOR_REF="$INPUT_EDITOR_REF"
+            EDITOR_REF_TYPE="$INPUT_EDITOR_REF_TYPE"
           fi
+          if [ -z "$EDITOR_REF" ]; then
+            EDITOR_REF="$(tr -d '[:space:]' < .editor-version)"
+            EDITOR_REF_TYPE="tag"
+          fi
+          if [ -z "$EDITOR_REF" ]; then
+            echo "::error::.editor-version is empty and no editor_ref was given"
+            exit 1
+          fi
+          echo "Module ${TAG_NAME#v} with editor ${EDITOR_REF} (${EDITOR_REF_TYPE}) from ${EDITOR_REPO_URL}"
+          {
+            echo "TAG_NAME=${TAG_NAME}"
+            echo "RELEASE_TAG=${TAG_NAME#v}"
+            echo "EXELEARNING_EDITOR_REPO_URL=${EDITOR_REPO_URL}"
+            echo "EXELEARNING_EDITOR_REF=${EDITOR_REF}"
+            echo "EXELEARNING_EDITOR_REF_TYPE=${EDITOR_REF_TYPE}"
+          } >> "$GITHUB_ENV"
 
       - name: Install PHP dependencies
         run: composer install --no-interaction --prefer-dist --no-dev
@@ -68,7 +89,7 @@ jobs:
         run: make build-editor
 
       - name: Create package
-        run: make package VERSION=${RELEASE_TAG}
+        run: make package VERSION="${RELEASE_TAG}"
 
       - name: Upload ZIP as workflow artifact
         uses: actions/upload-artifact@v7
@@ -77,25 +98,29 @@ jobs:
           path: ExeLearning-${{ env.RELEASE_TAG }}.zip
 
       - name: Build Playground URL for this release
-        if: github.event_name == 'push'
         id: playground
         run: |
-          TAG_NAME="${GITHUB_REF##*/}"
-          RELEASE_URL="https://github.com/${{ github.repository }}/releases/download/${TAG_NAME}/ExeLearning-${RELEASE_TAG}.zip"
+          RELEASE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_NAME}/ExeLearning-${RELEASE_TAG}.zip"
           BLUEPRINT=$(jq --arg url "$RELEASE_URL" '.modules[0].source.url = $url' blueprint.json)
           ENCODED=$(echo "$BLUEPRINT" | base64 -w 0 | tr '+/' '-_' | tr -d '=')
-          echo "url=https://ateeducacion.github.io/omeka-s-playground/?blueprint-data=${ENCODED}" >> $GITHUB_OUTPUT
+          echo "url=https://ateeducacion.github.io/omeka-s-playground/?blueprint-data=${ENCODED}" >> "$GITHUB_OUTPUT"
 
       - name: Publish/Update GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ github.event_name == 'push' && github.ref_name || env.RELEASE_TAG }}
+          tag_name: ${{ env.TAG_NAME }}
+          target_commitish: ${{ github.sha }}
+          # A SemVer pre-release (4.0.6-rc.1) must not become the "latest"
+          # release: sites following "latest" stay on the last stable version.
+          prerelease: ${{ contains(env.RELEASE_TAG, '-') }}
           files: ExeLearning-${{ env.RELEASE_TAG }}.zip
           generate_release_notes: true
           append_body: true
           body: |
 
             ---
+
+            Bundled eXeLearning editor: ${{ env.EXELEARNING_EDITOR_REF }}
 
             <a href="${{ steps.playground.outputs.url }}"><img src="https://raw.githubusercontent.com/ateeducacion/omeka-s-playground/main/ogimage.png" alt="Try eXeLearning in your browser" width="220"></a><br>
             <small><a href="${{ steps.playground.outputs.url }}">Try in your browser</a></small>

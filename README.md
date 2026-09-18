@@ -100,6 +100,27 @@ test and on line coverage below `MIN_COVERAGE` (90%), and writes its reports to
 pull requests but does not block them — see
 [ADR-32-01](docs/architecture/adr/ADR-32-01-use-a-single-blocking-whole-module-coverage-gate.md).
 
+### Releasing
+
+Module releases are normally automatic: whenever the editor publishes a release,
+`check-editor-releases.yml` bundles it, records its tag in `.editor-version` and
+publishes the module with the same version number.
+
+To ship a module-only change before the next editor release, tag a SemVer
+pre-release of the *next* version and push the tag:
+
+```bash
+git tag v4.0.6-rc.1 && git push origin v4.0.6-rc.1
+```
+
+`release.yml` then packages module `4.0.6-rc.1` with the editor named in
+`.editor-version` (still `v4.0.5`) and marks the GitHub release as a
+pre-release, so "latest" keeps pointing at the last stable version. Omeka S
+orders `4.0.5 < 4.0.6-rc.1 < 4.0.6`, so sites upgrade in sequence. Valid module
+versions are `X.Y.Z` and `X.Y.Z-(alpha|beta|rc).N` only: Omeka S parses them
+with Composer's semver library, which rejects other labels, and `make package`
+refuses them. Run the workflow manually to override the editor ref.
+
 ### Architecture documentation
 
 Architecture Decision Records (ADRs) and change documents live under
