@@ -44,8 +44,8 @@ class ElpFileService
     /**
      * @param ApiManager $api
      * @param EntityManager $entityManager
-     * @param string $basePath Path to module's data/exelearning directory
-     * @param string $filesPath Path to Omeka's files directory
+     * @param string $basePath Extraction root, <files>/exelearning
+     * @param string $filesPath Omeka's files directory, from Service\FilesPath
      * @param Logger|null $logger
      * @param object|null $tempFileFactory Omeka\File\TempFileFactory (optional;
      *                                     required for thumbnail generation)
@@ -81,13 +81,46 @@ class ElpFileService
     /**
      * Process an uploaded eXeLearning file.
      *
+     * Records the reason on failure before rethrowing, so the admin media view
+     * -- the only caller that retries -- stops reattempting an unprocessable
+     * file on every render, and clears a stale reason on success.
+     *
      * @param MediaRepresentation $media
      * @return array Result with hash and hasPreview
+     * @throws \Exception
+     */
+    public function processUploadedFile(MediaRepresentation $media): array
+    {
+        try {
+            $result = $this->doProcessUploadedFile($media);
+        } catch (\Throwable $e) {
+            try {
+                $this->updateMediaData($media, [
+                    'exelearning_process_error' => $e->getMessage(),
+                ]);
+            } catch (\Throwable $ignored) {
+                // Never let bookkeeping mask the real failure.
+            }
+            throw $e;
+        }
+
+        if ($this->hasProcessingError($media)) {
+            $this->updateMediaData($media, ['exelearning_process_error' => '']);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Extract and register an eXeLearning package.
+     *
+     * @param MediaRepresentation $media
+     * @return array
      * @throws \Exception
      *
      * @codeCoverageIgnore
      */
-    public function processUploadedFile(MediaRepresentation $media): array
+    private function doProcessUploadedFile(MediaRepresentation $media): array
     {
         $this->log('info', sprintf('Processing media %d', $media->id()));
 
@@ -102,7 +135,7 @@ class ElpFileService
         $oldHash = $this->getMediaHash($media);
 
         // Only extract genuine eXeLearning packages. Anything else is marked
-        // processed so the view hooks do not re-check (and re-extract) it on
+        // processed so the admin view does not re-check (and re-extract) it on
         // every render.
         if (!$this->validateElpFile($filePath)) {
             $this->log('info', sprintf('Media %d is not a valid eXeLearning package; skipping extraction', $media->id()));
@@ -268,6 +301,23 @@ class ElpFileService
     {
         $hash = $this->getMediaHash($media);
         if ($hash) {
+            $this->cleanupMediaByHash($hash);
+        }
+    }
+
+    /**
+     * Remove the extraction directory for a hash.
+     *
+     * Takes the hash rather than a representation because the caller is bound
+     * to `entity.remove.post`, which hands over a Doctrine entity; the rest of
+     * this service works with a MediaRepresentation, and an entity has none of
+     * its methods.
+     *
+     * @param string $hash
+     */
+    public function cleanupMediaByHash(string $hash): void
+    {
+        if ($hash !== '') {
             $this->deleteDirectory($this->basePath . '/' . $hash);
         }
     }
@@ -302,6 +352,31 @@ class ElpFileService
     }
 
     /**
+     * Whether a media belongs to this module.
+     *
+     * `.elpx` is the only extension eXeLearning owns. The module used to claim
+     * `.zip` as well, which took over a type belonging to the rest of the
+     * installation — every plain ZIP got this module's renderer stamped on it.
+     * Media the module has already extracted still count, whatever their
+     * extension, so packages uploaded as `.zip` under the old rule keep working
+     * instead of going dark on upgrade.
+     *
+     * @param mixed $media A media representation
+     * @return bool
+     */
+    public static function isExeLearningMedia($media): bool
+    {
+        $filename = $media->filename();
+        if ($filename && strtolower(pathinfo($filename, PATHINFO_EXTENSION)) === 'elpx') {
+            return true;
+        }
+
+        $data = $media->mediaData();
+
+        return is_array($data) && !empty($data['exelearning_extracted_hash']);
+    }
+
+    /**
      * Get the extracted hash for a media item.
      *
      * @param MediaRepresentation $media
@@ -328,9 +403,9 @@ class ElpFileService
     /**
      * Whether this media has already been processed (extracted or rejected).
      *
-     * Used by the view hooks to avoid re-extracting on every page view — a
-     * preview-less but already-processed package would otherwise be re-ingested
-     * on every render, accumulating orphan extraction directories.
+     * Used by the admin media view to avoid re-extracting on every page view —
+     * a preview-less but already-processed package would otherwise be
+     * re-ingested on every render, accumulating orphan extraction directories.
      *
      * @param MediaRepresentation $media
      * @return bool
@@ -339,6 +414,36 @@ class ElpFileService
     {
         $data = $media->mediaData();
         return ($data['exelearning_processed'] ?? '0') === '1';
+    }
+
+    /**
+     * Why the last processing attempt failed, or null if none did.
+     *
+     * A media whose file cannot be read never reaches the processed marker, so
+     * without this the admin view retried the extraction — and logged the same
+     * two lines — on every single render, forever. Recording the reason both
+     * stops the retry loop and gives the admin UI something to show.
+     *
+     * @param MediaRepresentation $media
+     * @return string|null
+     */
+    public function getProcessingError(MediaRepresentation $media): ?string
+    {
+        $data = $media->mediaData();
+        $error = $data['exelearning_process_error'] ?? null;
+
+        return is_string($error) && $error !== '' ? $error : null;
+    }
+
+    /**
+     * Whether the last processing attempt failed.
+     *
+     * @param MediaRepresentation $media
+     * @return bool
+     */
+    public function hasProcessingError(MediaRepresentation $media): bool
+    {
+        return $this->getProcessingError($media) !== null;
     }
 
     /**

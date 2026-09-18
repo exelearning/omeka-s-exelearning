@@ -1,147 +1,38 @@
 <?php
 /**
- * Admin media show partial - displays eXeLearning content in an iframe.
+ * Admin media show partial.
+ *
+ * The viewer itself is rendered by ExeLearningRenderer through
+ * $media->render(), which core's admin media page calls before triggering
+ * view.show.after. This partial therefore carries only what the renderer
+ * cannot: the editor modal its toolbar button opens, and the download filename
+ * fix-up for core's File Derivatives links.
  *
  * @var \Laminas\View\Renderer\PhpRenderer $this
  * @var \Omeka\Api\Representation\MediaRepresentation $media
- * @var string $contentPath  Relative path: /exelearning/content/{hash}/index.html
+ * @var string|null $processingError Why the last extraction attempt failed.
  */
 
-use ExeLearning\Service\DownloadFormats;
-
-// Check if user can edit this media and if the bundled editor is available
 $canEdit = $this->identity() && $this->userIsAllowed('Omeka\Entity\Media', 'update');
 $editorInstalled = \ExeLearning\Service\EditorBundle::isAvailable();
 
-$exeStoredFormats = null;
-try {
-    $exeStoredFormats = $this->setting('exelearning_download_formats', null);
-} catch (\Throwable $e) {
-    $exeStoredFormats = null;
-}
-$exeFormatIds = $exeStoredFormats === null
-    ? DownloadFormats::enabledByDefault()
-    : DownloadFormats::sanitize($exeStoredFormats);
-$exeShowDownload = !empty($exeFormatIds);
-if ($exeShowDownload) {
-    DownloadFormats::enqueueDownloadAssets($this);
-    $this->headLink()->appendStylesheet(
-        $this->assetUrl('css/exelearning.css', 'ExeLearning')
-    );
-}
-
-$editUrl = $this->url('admin/exelearning-editor', ['action' => 'edit', 'id' => $media->id()]);
-$mediaId = $media->id();
-
-// Load modal assets only when editor is available
 if ($canEdit && $editorInstalled) {
     $this->headLink()->appendStylesheet($this->assetUrl('css/exelearning-editor.css', 'ExeLearning'));
     $this->headScript()->appendFile($this->assetUrl('js/exelearning-editor.js', 'ExeLearning'));
 }
 ?>
 
-<style>
-.exelearning-admin-viewer {
-    margin: 1rem 0;
-    border: 1px solid #dfdfdf;
-    border-radius: 3px;
-    background: #fff;
-}
-.exelearning-admin-viewer h4 {
-    margin: 0;
-    padding: 0.75rem 1rem;
-    background: #f7f7f7;
-    border-bottom: 1px solid #dfdfdf;
-    font-size: 14px;
-    font-weight: 600;
-}
-.exelearning-admin-viewer .viewer-controls {
-    padding: 0.5rem 1rem;
-    background: #f7f7f7;
-    border-bottom: 1px solid #dfdfdf;
-    display: flex;
-    gap: 0.5rem;
-    align-items: center;
-}
-.exelearning-admin-viewer .viewer-controls a,
-.exelearning-admin-viewer .viewer-controls button {
-    font-size: 13px;
-}
-.exelearning-admin-viewer .viewer-controls .edit-btn {
-    background: #2271b1;
-    color: #fff;
-    border: none;
-    cursor: pointer;
-    padding: 0.4rem 0.8rem;
-    border-radius: 3px;
-    text-decoration: none;
-}
-.exelearning-admin-viewer .viewer-controls .edit-btn:hover {
-    background: #135e96;
-    color: #fff;
-}
-.exelearning-admin-viewer .preview-iframe {
-    display: block;
-    width: 100%;
-    height: 600px;
-    border: none;
-}
-</style>
-
-<div class="exelearning-admin-viewer">
-    <h4><?= $this->translate('eXeLearning Preview') ?></h4>
-    <div class="viewer-controls">
-        <a data-exe-content-path="<?= $this->escapeHtmlAttr($contentPath) ?>" target="_blank" rel="noopener noreferrer" class="button" id="exe-open-tab-link">
-            <span class="o-icon-external" aria-hidden="true"></span>
-            <?= $this->translate('Open in new tab') ?>
-        </a>
-        <?php if ($exeShowDownload): ?>
-            <?= DownloadFormats::renderSplitButton($this, $media, $exeFormatIds, 'admin') ?>
-        <?php endif; ?>
-
-        <div style="margin-left:auto;"></div>
-        <?php if ($canEdit && $editorInstalled): ?>
-        <button type="button" class="edit-btn"
-                onclick="ExeLearningEditor.open(<?= $mediaId ?>, '<?= $this->escapeJs($editUrl) ?>')">
-            <span class="o-icon-edit" aria-hidden="true"></span>
-            <?= $this->translate('Edit in eXeLearning') ?>
-        </button>
-        <?php elseif ($canEdit): ?>
-        <a href="<?= $this->escapeHtmlAttr($this->url('admin/default', ['controller' => 'module', 'action' => 'configure'], ['query' => ['id' => 'ExeLearning']])) ?>" class="button">
-            <span class="o-icon-install" aria-hidden="true"></span>
-            <?= $this->translate('Install Editor') ?>
-        </a>
-        <?php endif; ?>
-    </div>
-    <?php // allow-same-origin is required for the php-wasm playground: its
-          // service worker only intercepts requests from a same-origin
-          // document, so an opaque (sandboxed) iframe would 404. ?>
-    <iframe
-        class="preview-iframe"
-        data-exe-content-path="<?= $this->escapeHtmlAttr($contentPath) ?>"
-        sandbox="allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox"
-        referrerpolicy="no-referrer"
-        allowfullscreen></iframe>
+<?php if (!empty($processingError)): ?>
+<div class="exelearning-process-error error">
+    <p>
+        <?= $this->escapeHtml($this->translate('This eXeLearning package could not be processed, so no preview is available.')) ?>
+    </p>
+    <p><code><?= $this->escapeHtml($processingError) ?></code></p>
+    <p>
+        <?= $this->escapeHtml($this->translate('Fix the cause, then save this media to try again.')) ?>
+    </p>
 </div>
-
-<script>
-// Build content URLs using window.location so the playground SW scope prefix
-// (/playground/{uuid}/php83/) is included — PHP cannot see it, JS can.
-(function() {
-    var href = window.location.href;
-    var base = href;
-    ['/admin/', '/s/', '/api/'].some(function(m) {
-        var idx = href.indexOf(m);
-        if (idx !== -1) { base = href.substring(0, idx); return true; }
-        return false;
-    });
-    window.exelearningContentBase = base;
-    document.querySelectorAll('[data-exe-content-path]').forEach(function(el) {
-        var url = base + el.getAttribute('data-exe-content-path');
-        el.tagName === 'IFRAME' ? (el.src = url) : (el.href = url);
-    });
-})();
-</script>
+<?php endif; ?>
 
 <?php if ($canEdit && $editorInstalled): ?>
 <!-- eXeLearning Editor Modal -->

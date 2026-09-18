@@ -13,7 +13,7 @@ description: "Add or change an ExeLearning route, controller action, or endpoint
 3. Keep CSRF and ACL checks for mutations. Test denied direct requests as well as successful UI use;
    neither navigation visibility nor a route prefix authorizes a caller.
 4. Add a view only for HTML responses. Reuse current JSON/API-problem response patterns otherwise.
-5. Generate route URLs through existing helpers and `Module::extractBasePath()` where needed.
+5. Generate route URLs through existing helpers and the controllers' `extractBasePath()` where needed.
    Do not use `$request->getBasePath()` for scoped installations.
 6. Add a controller test under `test/ExeLearningTest/Controller/`, and run `make lint` and
    `make test-coverage`. Check subpath URLs when changing client-facing routes.

@@ -16,6 +16,12 @@ class MediaRepresentation
     private array $mediaData;
     private ?object $item;
 
+    /** @var string What render() returns; also records that it was called. */
+    public string $rendered = '';
+
+    /** @var int How many times render() was called. */
+    public int $renderCalls = 0;
+
     public function __construct(
         string $originalUrl,
         string $displayTitle,
@@ -60,5 +66,15 @@ class MediaRepresentation
     public function item(): ?object
     {
         return $this->item;
+    }
+
+    /**
+     * Omeka resolves the media's `renderer` column through
+     * Omeka\Media\Renderer\Manager and delegates here.
+     */
+    public function render(array $options = []): string
+    {
+        $this->renderCalls++;
+        return $this->rendered;
     }
 }

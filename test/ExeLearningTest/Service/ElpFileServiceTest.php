@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace ExeLearningTest\Service;
 
 use ExeLearning\Service\ElpFileService;
+use ExeLearningTest\Doubles\FakeMediaEntity;
+use ExeLearningTest\Doubles\RecordingEntityManager;
 use Omeka\Api\Representation\MediaRepresentation;
 use Omeka\Api\Manager as ApiManager;
 use Doctrine\ORM\EntityManager;
@@ -503,6 +505,172 @@ class ElpFileServiceTest extends TestCase
         $service->cleanupMedia($media);
 
         $this->assertDirectoryDoesNotExist($hashDir);
+    }
+
+    public function testCleanupMediaByHashIgnoresAnEmptyHash(): void
+    {
+        // entity.remove.post hands Module a Doctrine entity, so cleanup goes
+        // through the hash rather than a representation.
+        $this->service->cleanupMediaByHash('');
+        $this->assertDirectoryExists($this->testDir);
+    }
+
+    // =========================================================================
+    // isExeLearningMedia() — what this module actually claims
+    // =========================================================================
+
+    /**
+     * @dataProvider claimedMediaProvider
+     * @param array<string, mixed> $mediaData
+     */
+    public function testIsExeLearningMediaClaimsElpxAndNothingElse(
+        string $filename,
+        array $mediaData,
+        bool $expected
+    ): void {
+        $media = new MediaRepresentation(
+            'http://example.com/' . $filename,
+            'Test File',
+            $filename,
+            1,
+            $mediaData
+        );
+
+        $this->assertSame($expected, ElpFileService::isExeLearningMedia($media));
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: array<string, mixed>, 2: bool}>
+     */
+    public function claimedMediaProvider(): array
+    {
+        return [
+            'elpx' => ['course.elpx', [], true],
+            'uppercase elpx' => ['COURSE.ELPX', [], true],
+            // .zip is an installation-wide type; claiming it stamped this
+            // module's renderer onto every archive on the site.
+            'plain zip' => ['archive.zip', [], false],
+            'plain zip uppercase' => ['ARCHIVE.ZIP', [], false],
+            'octet-stream-ish binary' => ['blob.bin', [], false],
+            'pdf' => ['doc.pdf', [], false],
+            'no extension' => ['course', [], false],
+            // A package extracted under the old, looser rule keeps working: it
+            // is keyed off the module's own marker, not an extension it no
+            // longer advertises.
+            'zip this module extracted' => ['legacy.zip', ['exelearning_extracted_hash' => 'abc'], true],
+            'zip with an empty marker' => ['legacy.zip', ['exelearning_extracted_hash' => ''], false],
+        ];
+    }
+
+    // =========================================================================
+    // Processing-failure marker
+    // =========================================================================
+
+    public function testProcessingErrorIsAbsentByDefault(): void
+    {
+        $media = new MediaRepresentation('http://e/f.elpx', 'T', 'f.elpx', 1, []);
+
+        $this->assertNull($this->service->getProcessingError($media));
+        $this->assertFalse($this->service->hasProcessingError($media));
+    }
+
+    public function testProcessingErrorReadsTheRecordedReason(): void
+    {
+        $media = new MediaRepresentation('http://e/f.elpx', 'T', 'f.elpx', 1, [
+            'exelearning_process_error' => 'Media file not found: /srv/original/f.elpx',
+        ]);
+
+        $this->assertSame(
+            'Media file not found: /srv/original/f.elpx',
+            $this->service->getProcessingError($media)
+        );
+        $this->assertTrue($this->service->hasProcessingError($media));
+    }
+
+    public function testAClearedMarkerDoesNotCountAsAFailure(): void
+    {
+        $media = new MediaRepresentation('http://e/f.elpx', 'T', 'f.elpx', 1, [
+            'exelearning_process_error' => '',
+        ]);
+
+        $this->assertNull($this->service->getProcessingError($media));
+        $this->assertFalse($this->service->hasProcessingError($media));
+    }
+
+    public function testAFailedProcessingAttemptRecordsWhyAndRethrows(): void
+    {
+        // Without the marker, an unreadable file never reaches the processed
+        // flag, so the admin view re-extracted and re-logged it on every render.
+        $entity = new FakeMediaEntity('missing.elpx', 7, []);
+        $service = new ElpFileService(
+            new ApiManager(),
+            new RecordingEntityManager($entity),
+            $this->testDir . '/exelearning',
+            $this->filesPath
+        );
+        $media = new MediaRepresentation('http://e/m.elpx', 'T', 'missing.elpx', 7, []);
+
+        try {
+            $service->processUploadedFile($media);
+            $this->fail('processUploadedFile() must still throw');
+        } catch (\Throwable $e) {
+            $this->assertStringContainsString('Media file not found', $e->getMessage());
+        }
+
+        $this->assertStringContainsString(
+            'Media file not found',
+            $entity->data['exelearning_process_error'] ?? ''
+        );
+    }
+
+    public function testBookkeepingFailureNeverMasksTheRealError(): void
+    {
+        // Recording why processing failed must not replace the reason it failed.
+        $brokenEntityManager = new class extends EntityManager {
+            public function find(string $className, $id)
+            {
+                throw new \RuntimeException('entity manager closed');
+            }
+        };
+        $service = new ElpFileService(
+            new ApiManager(),
+            $brokenEntityManager,
+            $this->testDir . '/exelearning',
+            $this->filesPath
+        );
+        $media = new MediaRepresentation('http://e/m.elpx', 'T', 'missing.elpx', 7, []);
+
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessageMatches('/Media file not found/');
+
+        $service->processUploadedFile($media);
+    }
+
+    public function testASuccessfulProcessClearsAStaleFailureMarker(): void
+    {
+        $zipPath = $this->filesPath . '/original/good.elpx';
+        $this->createTestZip($zipPath, [
+            'content.xml' => '<odeNavStructureSync/>',
+            'index.html' => '<html></html>',
+        ]);
+
+        $entity = new FakeMediaEntity('good.elpx', 8, [
+            'exelearning_process_error' => 'Media file not found',
+        ]);
+        $service = new ElpFileService(
+            new ApiManager(),
+            new RecordingEntityManager($entity),
+            $this->testDir . '/exelearning',
+            $this->filesPath
+        );
+        $media = new MediaRepresentation('http://e/g.elpx', 'T', 'good.elpx', 8, [
+            'exelearning_process_error' => 'Media file not found',
+        ]);
+
+        $service->processUploadedFile($media);
+
+        $this->assertSame('', $entity->data['exelearning_process_error']);
+        $this->assertSame('1', $entity->data['exelearning_processed']);
     }
 
     public function testCleanupMediaDoesNothingWithoutHash(): void

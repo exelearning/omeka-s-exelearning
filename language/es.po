@@ -46,9 +46,17 @@ msgstr "Guardar en Omeka"
 msgid "Close"
 msgstr "Cerrar"
 
-#: view/exelearning/public/item-show.phtml:61
+#: src/Media/FileRenderer/ExeLearningRenderer.php:105
 msgid "Open fullscreen"
 msgstr "Abrir a pantalla completa"
+
+#: view/exelearning/admin/media-show.phtml:31
+msgid "Fix the cause, then save this media to try again."
+msgstr "Corrija la causa y guarde este medio para volver a intentarlo."
+
+#: view/exelearning/admin/media-show.phtml:28
+msgid "This eXeLearning package could not be processed, so no preview is available."
+msgstr "No se ha podido procesar este paquete eXeLearning, por lo que no hay vista previa disponible."
 
 #: view/exelearning/public/item-show.phtml:64
 #: src/Media/FileRenderer/ExeLearningRenderer.php:92

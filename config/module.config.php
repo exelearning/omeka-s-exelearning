@@ -48,18 +48,29 @@ return [
         ],
     ],
 
+    // Omeka resolves a media's `renderer` column through this manager, which is
+    // what handleMediaHydrate() writes 'exelearning_renderer' into. Registering
+    // it only under `file_renderers` (as this module used to) left the name
+    // unresolvable, so Omeka fell back to a renderer that returns an empty
+    // string and $media->render() produced nothing.
+    'media_renderers' => [
+        'factories' => [
+            'exelearning_renderer' => Media\FileRenderer\ExeLearningRendererFactory::class,
+        ],
+    ],
+
+    // Consulted only when a media's `renderer` column is the literal 'file',
+    // i.e. eXeLearning media stored before this module claimed them. Only the
+    // `elpx` extension is claimed: `zip`, `application/zip` and especially
+    // `application/octet-stream` are installation-wide types that belong to the
+    // rest of the site, and this manager's aliases are a single namespace shared
+    // by every installed module.
     'file_renderers' => [
         'factories' => [
             'exelearning_renderer' => Media\FileRenderer\ExeLearningRendererFactory::class,
         ],
         'aliases' => [
-            // MIME types
-            'application/zip' => 'exelearning_renderer',
-            'application/x-zip-compressed' => 'exelearning_renderer',
-            'application/octet-stream' => 'exelearning_renderer',
-            // File extensions
             'elpx' => 'exelearning_renderer',
-            'zip' => 'exelearning_renderer',
         ],
     ],
 

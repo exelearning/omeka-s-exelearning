@@ -29,6 +29,12 @@ class PhpRenderer
     /** @var string */
     public string $basePath = '';
 
+    /** @var mixed Returned by identity(). */
+    public $identity = null;
+
+    /** @var bool Returned by userIsAllowed(). */
+    public bool $userIsAllowed = false;
+
     public function __construct()
     {
         $this->headScript = new class {
@@ -136,6 +142,19 @@ class PhpRenderer
                 throw new \Exception('No helper found: ' . $name);
             }
         };
+    }
+
+    /**
+     * @return mixed
+     */
+    public function identity()
+    {
+        return $this->identity;
+    }
+
+    public function userIsAllowed(string $resource, string $privilege): bool
+    {
+        return $this->userIsAllowed;
     }
 
     /**

@@ -1,7 +1,7 @@
 # eXeLearning
 [![CI](https://img.shields.io/github/actions/workflow/status/exelearning/omeka-s-exelearning/ci.yml?branch=main&label=CI)](https://github.com/exelearning/omeka-s-exelearning/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/exelearning/omeka-s-exelearning/graph/badge.svg)](https://codecov.io/gh/exelearning/omeka-s-exelearning)
-![Omeka S Version](https://img.shields.io/badge/Omeka_S-%3E%3D3.0-blue)
+![Omeka S Version](https://img.shields.io/badge/Omeka_S-%3E%3D4.0-blue)
 ![PHP Version](https://img.shields.io/badge/PHP-%3E%3D%207.4-8892bf)
 ![License: AGPL v3](https://img.shields.io/badge/License-AGPLv3-blue.svg)
 ![Downloads](https://img.shields.io/github/downloads/exelearning/omeka-s-exelearning/total)
@@ -17,7 +17,7 @@ Omeka S module for eXeLearning content management. Upload, view and edit eXeLear
 
 ## Features
 
-- **ELPX File Support**: Upload and manage eXeLearning `.elpx` files through Omeka S
+- **ELPX File Support**: Upload and manage eXeLearning `.elpx` files through Omeka S (only `.elpx`; plain `.zip` uploads are left to the rest of the installation)
 - **Automatic Extraction**: ELPX files are automatically extracted and ready to display
 - **Embedded Editor**: Edit eXeLearning content directly from Omeka S without leaving the browser
 - **Automatic Thumbnails**: Generates visual thumbnails from the content's first page
@@ -119,7 +119,7 @@ make architecture-check     # validate identifiers, metadata, cross-references
 
 ## Requirements
 
-- Omeka S 3.0 or higher
+- Omeka S 4.0 or higher
 - PHP 7.4 or higher with ZipArchive extension
 
 ## Issues and Support
