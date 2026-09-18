@@ -428,7 +428,7 @@ class ModuleTest extends TestCase
         $this->assertSame([
             'Omeka\Api\Adapter\MediaAdapter::api.hydrate.post',
             'Omeka\Api\Adapter\MediaAdapter::api.create.post',
-            'Omeka\Api\Adapter\MediaAdapter::api.delete.post',
+            'Omeka\Entity\Media::entity.remove.post',
             'Omeka\Controller\Admin\Media::view.show.after',
             '*::view.layout',
             'Omeka\Api\Representation\MediaRepresentation::rep.resource.json',
@@ -934,24 +934,20 @@ class ModuleTest extends TestCase
     }
 
     /**
-     * Build the event Omeka actually triggers for a delete.
+     * Build the event Omeka actually triggers when a media is removed.
      *
-     * `Api\Manager::finalize()` constructs it as
-     * `['request' => $request, 'response' => $response]`, and
-     * `AbstractEntityAdapter::delete()` returns `new Response($entity)`, so the
-     * removed entity is the response content. The earlier tests here passed an
-     * `entity` parameter instead -- a shape `Api\Manager::initialize()` never
-     * produces for `api.delete.pre` -- which is why they stayed green while the
-     * cleanup did nothing against real Omeka.
+     * `Omeka\Db\Event\Subscriber\Entity::postRemove()` relays Doctrine's
+     * lifecycle event with the entity as the *target*, which is the same shape
+     * core's own `deleteMediaFiles()` consumes. Earlier tests here passed an
+     * `entity` parameter on `api.delete.pre` -- a shape
+     * `Api\Manager::initialize()` never produces -- which is why they stayed
+     * green while the cleanup did nothing against real Omeka.
      *
      * @param mixed $entity
      */
     private function deleteEvent($entity): Event
     {
-        return new Event('api.delete.post', null, [
-            'request' => new FakeApiRequest([]),
-            'response' => new FakeApiResponse($entity),
-        ]);
+        return new Event('entity.remove.post', $entity);
     }
 
     public function testHandleMediaDeleteRemovesTheExtractionDirectory(): void
@@ -972,28 +968,52 @@ class ModuleTest extends TestCase
         $this->assertSame(['hash-1'], $elp->cleanedHashes);
     }
 
-    public function testHandleMediaDeleteReadsTheEntityFromTheResponseNotAnEntityParam(): void
+    public function testHandleMediaDeleteReadsTheEntityFromTheEventTarget(): void
     {
-        // Pin the contract: an `entity` parameter is what `api.delete.pre`
-        // would have needed and never had. If the listener ever drifts back to
-        // reading one, this stays empty and fails.
+        // Pin the contract against both earlier mistakes: an `entity` parameter
+        // (which api.delete.pre never carried) and a `response` parameter (which
+        // api.delete.post carries but never fires for a cascade-removed media).
+        // If the listener drifts back to either, these stay empty and fail.
+        $elp = new FakeElpFileService(null, false, false, true);
+        $module = new TestableModule(new TestServiceLocator([
+            'Omeka\Logger' => new Logger(),
+            ElpFileService::class => $elp,
+        ]));
+        $entity = new FakeMediaEntity('course.elpx', 21, ['exelearning_extracted_hash' => 'hash-1']);
+
+        $module->handleMediaDelete(new Event('entity.remove.post', $entity));
+        $this->assertSame(['hash-1'], $elp->cleanedHashes);
+
+        $elp->cleanedHashes = [];
+        $module->handleMediaDelete(new Event('api.delete.pre', null, ['entity' => $entity]));
+        $module->handleMediaDelete(new Event('api.delete.post', null, [
+            'response' => new FakeApiResponse($entity),
+        ]));
+        $this->assertSame([], $elp->cleanedHashes);
+    }
+
+    public function testHandleMediaDeleteCleansUpMediaRemovedByDeletingTheirItem(): void
+    {
+        // Item::$media is mapped cascade={"persist","remove","detach"}, so
+        // deleting an item removes its media through Doctrine with no API
+        // request. That is the commonest way an eXeLearning package is deleted,
+        // and an api.delete.* listener would never see it. The lifecycle event
+        // fires once per cascade-removed media, which is why core's own
+        // deleteMediaFiles() uses it.
         $elp = new FakeElpFileService(null, false, false, true);
         $module = new TestableModule(new TestServiceLocator([
             'Omeka\Logger' => new Logger(),
             ElpFileService::class => $elp,
         ]));
 
-        $entity = new FakeMediaEntity('course.elpx', 21, ['exelearning_extracted_hash' => 'hash-1']);
-        $module->handleMediaDelete(new Event('api.delete.post', null, [
-            'request' => new FakeApiRequest([]),
-            'response' => new FakeApiResponse($entity),
-        ]));
-        $this->assertSame(['hash-1'], $elp->cleanedHashes);
+        foreach ([['a.elpx', 31, 'hash-a'], ['b.elpx', 32, 'hash-b']] as [$name, $id, $hash]) {
+            $module->handleMediaDelete(new Event(
+                'entity.remove.post',
+                new FakeMediaEntity($name, $id, ['exelearning_extracted_hash' => $hash])
+            ));
+        }
 
-        // The shape Omeka never sends must clean nothing rather than fatal.
-        $elp->cleanedHashes = [];
-        $module->handleMediaDelete(new Event('api.delete.post', null, ['entity' => $entity]));
-        $this->assertSame([], $elp->cleanedHashes);
+        $this->assertSame(['hash-a', 'hash-b'], $elp->cleanedHashes);
     }
 
     public function testHandleMediaDeleteCleansUpLegacyZipPackagesToo(): void
@@ -1012,7 +1032,7 @@ class ModuleTest extends TestCase
         $this->assertSame(['hash-z'], $elp->cleanedHashes);
     }
 
-    public function testHandleMediaDeleteIgnoresIrrelevantResponses(): void
+    public function testHandleMediaDeleteIgnoresIrrelevantEntities(): void
     {
         $logger = new Logger();
         $elp = new FakeElpFileService(null, false, false, true);
@@ -1021,9 +1041,7 @@ class ModuleTest extends TestCase
             ElpFileService::class => $elp,
         ]));
 
-        // No response at all.
-        $module->handleMediaDelete(new Event('api.delete.post', null, ['request' => new FakeApiRequest([])]));
-        // A response carrying nothing.
+        // No entity at all.
         $module->handleMediaDelete($this->deleteEvent(null));
         // Media this module never extracted.
         $module->handleMediaDelete($this->deleteEvent(new FakeMediaEntity('photo.png', 22, [])));

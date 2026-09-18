@@ -21,7 +21,9 @@ This is the single most common source of bugs in Omeka event code.
 | --- | --- | --- | --- |
 | `api.hydrate.post` | `entity` | Doctrine **entity** | `getFilename()`, `getData()`, `setRenderer()` |
 | `api.create.post` | `response` | wraps an **entity** | `getContent()->getId()` |
-| `api.delete.pre` | `request` | API **request** in core initialization | `getId()`; do not assume an entity parameter |
+| `api.delete.pre` | `request` | API **request** in core initialization | `getId()`; there is no entity parameter |
+| `api.delete.post` | `request`, `response` | `response` wraps the removed **entity** | `getContent()`; API deletes only, not cascades |
+| `entity.remove.post` | event *target* | Doctrine **entity** (`postRemove`) | `getData()`; fires for API deletes *and* cascades |
 | `rep.resource.json` | event *target* | **representation** | `filename()`, `id()`, `mediaData()` |
 | `view.show.after` | view target | **representation** via `$view->resource` / `$view->item` | idem |
 
@@ -39,11 +41,10 @@ source. `handleMediaHydrate()` probes with `method_exists()` and falls back to
 
 All identifiers are attached in `Module::attachListeners()`:
 
-- `Omeka\Api\Adapter\MediaAdapter` — `api.hydrate.post`, `api.create.post`,
-  `api.delete.pre`
+- `Omeka\Api\Adapter\MediaAdapter` — `api.hydrate.post`, `api.create.post`
+- `Omeka\Entity\Media` — `entity.remove.post`
 - `Omeka\Api\Representation\MediaRepresentation` — `rep.resource.json`
-- `Omeka\Controller\Admin\Media`, `Omeka\Controller\Site\Item` —
-  `view.show.after`
+- `Omeka\Controller\Admin\Media` — `view.show.after`
 - `*` — `view.layout`
 
 Adding a listener means adding a case to `ModuleTest::testAttachListenersRegistersEveryOmekaHook`,
@@ -51,11 +52,17 @@ which asserts the exact registration list in order.
 
 Pick the event by what you need: `api.hydrate.post` to influence what gets
 persisted (it runs before the flush), `api.create.post` for work that needs a
-persisted id, `api.delete.pre` for cleanup that needs the row to still exist.
-Capture deletion data before it disappears, but verify the emitter: core API-pre
-events supply a request, not an entity. The current `handleMediaDelete()` expects
-an entity and returns if absent; do not copy that assumption from its test doubles
-into new handlers. Validate the actual supported-core event when changing cleanup.
+persisted id.
+
+**For cleanup that follows a deletion, use `entity.remove.post`**, as core's own
+`deleteMediaFiles()` does. Neither API event is sufficient: `api.delete.pre`
+carries no entity at all, and `api.delete.post` fires only for deletes that went
+through the API — `Item::$media` is mapped
+`cascade={"persist", "remove", "detach"}`, so deleting an item removes its media
+through Doctrine and an API listener never sees it. `handleMediaDelete()` sat on
+`api.delete.pre` for a long time and cleaned up nothing, while its tests passed,
+because they built an event shape Omeka does not emit. When changing a listener,
+read the emitter in core and model the real payload in the test.
 
 ## Media data
 

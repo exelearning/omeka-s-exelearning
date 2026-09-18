@@ -295,14 +295,15 @@ class Module extends AbstractModule
             [$this, 'handleMediaCreate']
         );
 
-        // Listen for media deletion to clean up extracted content. This is
-        // `.post`, not `.pre`: Api\Manager::initialize() gives a `.pre` event
-        // only a `request`, so the entity this needs is not there, while
-        // finalize() passes the `response` whose content is the removed entity.
-        // It also means the files go only after the delete actually succeeded.
+        // Clean up extracted content when a media is removed. This is the
+        // Doctrine lifecycle event, not an api.delete.* one, for the same
+        // reason Omeka's own core Module attaches deleteMediaFiles() here:
+        // deleting an *item* cascade-removes its media without going through
+        // the API, so an api.* listener would silently miss the commonest way
+        // an eXeLearning package is deleted.
         $sharedEventManager->attach(
-            'Omeka\Api\Adapter\MediaAdapter',
-            'api.delete.post',
+            'Omeka\Entity\Media',
+            'entity.remove.post',
             [$this, 'handleMediaDelete']
         );
 
@@ -714,18 +715,24 @@ JS
     }
 
     /**
-     * Handle media deletion event: clean up extracted content.
+     * Clean up extracted content when a media is removed.
      *
-     * Bound to `api.delete.post`. `Omeka\Api\Manager::initialize()` builds the
-     * `.pre` event with `['request' => $request]` and nothing else, so an
-     * `entity` parameter never arrives there -- reading one was why this cleanup
-     * silently did nothing. `finalize()` builds the `.post` event with
-     * `['request' => $request, 'response' => $response]`, and
-     * `AbstractEntityAdapter::delete()` returns `new Response($entity)` after
-     * the flush, so the removed entity is the response content. `finalize()`
-     * transforms that content only after the event has been triggered, and
-     * `batchDelete()` finalizes each subresponse, so this fires for batch
-     * deletes too.
+     * Bound to `entity.remove.post` on `Omeka\Entity\Media`, which is Doctrine's
+     * `postRemove` relayed by `Omeka\Db\Event\Subscriber\Entity`. Two earlier
+     * bindings were wrong:
+     *
+     * - `api.delete.pre` never carried an `entity` parameter at all.
+     *   `Omeka\Api\Manager::initialize()` builds it with
+     *   `['request' => $request]` and nothing else, so this listener returned
+     *   early every time and cleaned up nothing.
+     * - `api.delete.post` does carry the entity, as the response content, but
+     *   only fires for a media deleted through the API. `Item::$media` is mapped
+     *   `cascade={"persist", "remove", "detach"}`, so deleting an item removes
+     *   its media through Doctrine without an API request, and every extracted
+     *   package under it would have been left on disk.
+     *
+     * The lifecycle event fires for both, which is exactly why core's own
+     * `deleteMediaFiles()` uses it to remove the original and its thumbnails.
      *
      * @param Event $event
      */
@@ -735,12 +742,7 @@ JS
         $logger = $services->get('Omeka\Logger');
 
         try {
-            $response = $event->getParam('response');
-            if (!$response || !method_exists($response, 'getContent')) {
-                return;
-            }
-
-            $entity = $response->getContent();
+            $entity = $event->getTarget();
             if (!$entity || !method_exists($entity, 'getData')) {
                 return;
             }

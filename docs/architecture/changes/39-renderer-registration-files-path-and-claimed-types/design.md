@@ -315,9 +315,9 @@ extraction no longer runs during a GET. For `.elpx` the admin view repairs them.
   roster, so the absence of a public `view.show.after` hook is asserted rather
   than assumed.
 - `ModuleTest` covers media deletion against the event Omeka actually triggers
-  (`api.delete.post`, carrying `request` and `response`), including an explicit
-  test that the `entity` parameter shape — which `api.delete.pre` never
-  provides — cleans nothing.
+  (`entity.remove.post`, entity as target), including cascade removal from an
+  item delete, and an explicit test that both previously-used shapes — an
+  `entity` parameter and a `response` parameter — clean nothing.
 - `ModuleTest` covers the upgrade: `application/octet-stream` withdrawn,
   unrelated entries and site-wide `zip` preserved, an empty whitelist left
   empty, no ownership claimed over pre-existing values, a later uninstall
