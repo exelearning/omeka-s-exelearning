@@ -1,7 +1,7 @@
 ---
 id: ADR-40-01
 title: "Decouple the module version from the bundled editor version"
-status: Proposed
+status: Accepted
 date: 2026-09-18
 tracking_issue: 40
 deciders:
