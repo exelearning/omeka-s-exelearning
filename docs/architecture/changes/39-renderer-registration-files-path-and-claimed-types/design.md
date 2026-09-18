@@ -96,19 +96,33 @@ renders a notice.
 
 ### Deletion
 
-The listener moves from `api.delete.pre` to `api.delete.post`.
-`Omeka\Api\Manager::initialize()` builds the `.pre` event with
-`['request' => $request]` and nothing else, so the `entity` parameter this code
-read was never there and the cleanup silently did nothing on real Omeka — the
-module's own `omeka-s-api-and-adapters` skill already said so.
-`finalize()` builds the `.post` event with
-`['request' => $request, 'response' => $response]`, and
-`AbstractEntityAdapter::delete()` returns `new Response($entity)` after the
-flush, so the removed entity is the response content; `finalize()` transforms
-that content only after triggering the event, and `batchDelete()` finalizes each
-subresponse, so batch deletes are covered too. Running after the delete has
-succeeded is also better ordering: files go only once authorization and the
-flush have passed.
+The listener moves from `api.delete.pre` to `entity.remove.post` on
+`Omeka\Entity\Media` — the event core itself uses to delete a media's original
+and thumbnails (`application/Module.php`, `deleteMediaFiles()` @ `v4.2.0`).
+
+Two other bindings were considered and are wrong:
+
+- **`api.delete.pre` never carried an entity.**
+  `Omeka\Api\Manager::initialize()` builds it with `['request' => $request]` and
+  nothing else, so `$event->getParam('entity')` was always null, the listener
+  returned early, and the cleanup silently did nothing on real Omeka. The
+  module's own `omeka-s-api-and-adapters` skill already documented this.
+- **`api.delete.post` carries the entity but misses the common case.**
+  `finalize()` builds it with `['request' => $request, 'response' => $response]`
+  and `AbstractEntityAdapter::delete()` returns `new Response($entity)` after the
+  flush, so the entity is reachable — but the event fires only for deletes that
+  went through the API. `Item::$media` is mapped
+  `cascade={"persist", "remove", "detach"}` (`application/src/Entity/Item.php`),
+  so deleting an item removes its media through Doctrine with no API request at
+  all, and every extracted package underneath would have stayed on disk. That is
+  how most eXeLearning packages are deleted, so this would have narrowed the
+  original defect rather than removed it.
+
+`entity.remove.post` is Doctrine's `postRemove` relayed by
+`Omeka\Db\Event\Subscriber\Entity`. It fires once per removed media whether the
+delete came through the API or a cascade, and it hands the entity as the event
+target. Running after the removal also means files go only once authorization
+and the flush have passed.
 
 `Module::handleMediaDelete()` reads the hash from that entity and calls
 `ElpFileService::cleanupMediaByHash()`, a hash-taking sibling of the existing
@@ -135,9 +149,9 @@ moves into the renderer, gated on `isAdminRequest()`, `identity()`,
 is scoped to its own viewer element so several packages on one page do not
 rewrite each other's URLs.
 
-The `view.show.after` listener survives as a compatibility shim — see
-[ADR-39-01](../../adr/ADR-39-01-render-media-through-the-media-renderer-manager.md)
-and the next section.
+There is no public `view.show.after` listener left at all — see the next
+section and
+[ADR-39-01](../../adr/ADR-39-01-render-media-through-the-media-renderer-manager.md).
 
 ### Supported Omeka narrowed to `^4.0.0`, and the public listener deleted
 
@@ -210,7 +224,7 @@ system, and extraction never returns to a GET request.
 
 | ADR | Decision |
 | --- | --- |
-| [ADR-39-01](../../adr/ADR-39-01-render-media-through-the-media-renderer-manager.md) | Narrow to Omeka S 4, route the viewer through `media_renderers`, keep a configuration-gated `view.show.after` listener for pages that removed `mediaEmbeds` |
+| [ADR-39-01](../../adr/ADR-39-01-render-media-through-the-media-renderer-manager.md) | Narrow to Omeka S 4, route the viewer through `media_renderers`, and delete the public `view.show.after` listener outright |
 | [ADR-39-02](../../adr/ADR-39-02-preserve-current-iframe-behaviour-pending-opaque-origin-viewer.md) | Preserve the current iframe behaviour unchanged; the trust boundary is out of scope and owned by PR #21 |
 
 ## Migration / rollout

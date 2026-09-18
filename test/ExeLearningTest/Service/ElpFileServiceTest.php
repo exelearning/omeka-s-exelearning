@@ -509,8 +509,8 @@ class ElpFileServiceTest extends TestCase
 
     public function testCleanupMediaByHashIgnoresAnEmptyHash(): void
     {
-        // api.delete.pre hands Module an entity, so cleanup goes through the
-        // hash rather than a representation.
+        // entity.remove.post hands Module a Doctrine entity, so cleanup goes
+        // through the hash rather than a representation.
         $this->service->cleanupMediaByHash('');
         $this->assertDirectoryExists($this->testDir);
     }
@@ -600,7 +600,7 @@ class ElpFileServiceTest extends TestCase
     public function testAFailedProcessingAttemptRecordsWhyAndRethrows(): void
     {
         // Without the marker, an unreadable file never reaches the processed
-        // flag, so the view hooks re-extracted and re-logged it on every render.
+        // flag, so the admin view re-extracted and re-logged it on every render.
         $entity = new FakeMediaEntity('missing.elpx', 7, []);
         $service = new ElpFileService(
             new ApiManager(),

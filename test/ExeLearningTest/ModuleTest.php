@@ -800,7 +800,7 @@ class ModuleTest extends TestCase
 
     public function testSavingAMediaArmsOneMoreExtractionAttempt(): void
     {
-        // A recorded failure stops the view hooks retrying on every render,
+        // A recorded failure stops the admin view retrying on every render,
         // which would otherwise make it permanent. Saving the media is the
         // administrator's explicit retry, on a write request rather than a GET.
         $entity = new FakeMediaEntity('course.elpx', 40, [
@@ -992,14 +992,19 @@ class ModuleTest extends TestCase
         $this->assertSame([], $elp->cleanedHashes);
     }
 
-    public function testHandleMediaDeleteCleansUpMediaRemovedByDeletingTheirItem(): void
+    public function testHandleMediaDeleteModelsCascadeRemovedMediaEvents(): void
     {
-        // Item::$media is mapped cascade={"persist","remove","detach"}, so
-        // deleting an item removes its media through Doctrine with no API
-        // request. That is the commonest way an eXeLearning package is deleted,
-        // and an api.delete.* listener would never see it. The lifecycle event
-        // fires once per cascade-removed media, which is why core's own
-        // deleteMediaFiles() uses it.
+        // Models the *events* a cascade produces, not the cascade itself: this
+        // emits one entity.remove.post per media, which is what
+        // Omeka\Db\Event\Subscriber\Entity relays from Doctrine's postRemove
+        // when deleting an item removes its media
+        // (Item::$media is mapped cascade={"persist","remove","detach"}).
+        //
+        // That the cascade really produces these events is a property of
+        // Doctrine and Omeka core, verified by reading them rather than
+        // re-tested here; a real integration test would need a live entity
+        // manager and a database. What this pins is the module's half of the
+        // contract: every such event cleans up its own package.
         $elp = new FakeElpFileService(null, false, false, true);
         $module = new TestableModule(new TestServiceLocator([
             'Omeka\Logger' => new Logger(),

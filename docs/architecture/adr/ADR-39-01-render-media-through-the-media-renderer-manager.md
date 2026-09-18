@@ -162,8 +162,10 @@ reliable read; the check would be a guess wearing the costume of a lookup.
   resolves the same configuration with
   `$services->get('Omeka\Site\ThemeManager')->getCurrentTheme()` and
   `$services->get('Omeka\ResourcePageBlockLayoutManager')->getResourcePageBlocks(...)`.
-  The shim reads it the same way, so it sees what core renders from, without
-  rendering anything or inspecting generated markup.
+  This is how the withdrawn option 4 read the configuration, and it is recorded
+  here because it is also why that option could not work: the factory resolves
+  blocks per theme, but nothing in the resolved array says which regions the
+  template actually invokes.
 - `Omeka\ResourcePageBlockLayoutManager` is registered in `v4.2.0`
   `application/config/module.config.php:273` and absent from `v3.2.3`'s.
 - Omeka S 4.0 and 4.1 declare `"php": ">=7.4"` and only 4.2 raises it to
@@ -244,10 +246,10 @@ every Omeka surface that decides to render that media
   means — but it is a behaviour change for anyone who removed the block and still
   expected this module's viewer. It is configuration, and re-adding the block
   restores it.
-- The shim reads Omeka's configuration, so it is correct for themes that render
-  through the normal resource-page block mechanism. A theme that overrides
-  `site/item/show.phtml` and bypasses `resourcePageBlocks()` entirely is outside
-  what any configuration read can predict; see *Risks*.
+- The module no longer has any say in where or whether the viewer appears on an
+  item page. That is the point — it is Omeka's decision and the site
+  administrator's — but it does mean a misconfigured theme shows nothing and the
+  module cannot compensate; see *Risks*.
 
 ### Neutral
 

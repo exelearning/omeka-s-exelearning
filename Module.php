@@ -210,9 +210,8 @@ class Module extends AbstractModule
      * Removing it anyway is a deliberate hardening call, and it is defensible
      * because the type is not an Omeka default, matches any unidentified binary,
      * and is not needed for `.elpx`. An administrator who wants it can add it
-     * back in Omeka's own settings, where it is one checkbox and where the
-     * decision is recorded as theirs -- and where a later upgrade will not
-     * quietly undo it again.
+     * back in Omeka's file whitelist settings, where the decision is recorded as
+     * theirs -- and where a later upgrade will not quietly undo it again.
      *
      * Only this one value is touched. `application/zip`,
      * `application/x-zip-compressed`, the `zip` and `elpx` extensions and every
@@ -606,7 +605,7 @@ JS
             }
 
             // Saving the media is the retry. A failed extraction is remembered
-            // so the view hooks stop reattempting it on every render, which
+            // so the admin view stops reattempting it on every render, which
             // would otherwise make the marker permanent; clearing it here gives
             // an administrator who has fixed the underlying problem -- file
             // permissions, a re-upload, a corrected files directory -- an

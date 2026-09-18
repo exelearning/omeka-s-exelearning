@@ -81,9 +81,9 @@ class ElpFileService
     /**
      * Process an uploaded eXeLearning file.
      *
-     * Records the reason on failure before rethrowing, so the callers that gate
-     * on it (the view hooks) stop retrying an unprocessable file on every
-     * render, and clears a stale reason on success.
+     * Records the reason on failure before rethrowing, so the admin media view
+     * -- the only caller that retries -- stops reattempting an unprocessable
+     * file on every render, and clears a stale reason on success.
      *
      * @param MediaRepresentation $media
      * @return array Result with hash and hasPreview
@@ -135,7 +135,7 @@ class ElpFileService
         $oldHash = $this->getMediaHash($media);
 
         // Only extract genuine eXeLearning packages. Anything else is marked
-        // processed so the view hooks do not re-check (and re-extract) it on
+        // processed so the admin view does not re-check (and re-extract) it on
         // every render.
         if (!$this->validateElpFile($filePath)) {
             $this->log('info', sprintf('Media %d is not a valid eXeLearning package; skipping extraction', $media->id()));
@@ -308,8 +308,10 @@ class ElpFileService
     /**
      * Remove the extraction directory for a hash.
      *
-     * Takes the hash rather than a representation because `api.delete.pre`
-     * hands the module an entity, which has no representation methods.
+     * Takes the hash rather than a representation because the caller is bound
+     * to `entity.remove.post`, which hands over a Doctrine entity; the rest of
+     * this service works with a MediaRepresentation, and an entity has none of
+     * its methods.
      *
      * @param string $hash
      */
@@ -401,9 +403,9 @@ class ElpFileService
     /**
      * Whether this media has already been processed (extracted or rejected).
      *
-     * Used by the view hooks to avoid re-extracting on every page view — a
-     * preview-less but already-processed package would otherwise be re-ingested
-     * on every render, accumulating orphan extraction directories.
+     * Used by the admin media view to avoid re-extracting on every page view —
+     * a preview-less but already-processed package would otherwise be
+     * re-ingested on every render, accumulating orphan extraction directories.
      *
      * @param MediaRepresentation $media
      * @return bool
@@ -418,7 +420,7 @@ class ElpFileService
      * Why the last processing attempt failed, or null if none did.
      *
      * A media whose file cannot be read never reaches the processed marker, so
-     * without this the view hooks retried the extraction — and logged the same
+     * without this the admin view retried the extraction — and logged the same
      * two lines — on every single render, forever. Recording the reason both
      * stops the retry loop and gives the admin UI something to show.
      *
