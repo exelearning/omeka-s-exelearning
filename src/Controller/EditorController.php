@@ -66,9 +66,7 @@ class EditorController extends AbstractActionController
             return $this->redirect()->toRoute('admin');
         }
 
-        $filename = $media->filename();
-        $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
-        if (!in_array($extension, ['elpx', 'zip'])) {
+        if (!ElpFileService::isExeLearningMedia($media)) {
             $this->messenger()->addError($this->translate('This is not an eXeLearning file.')); // @translate
             return $this->redirect()->toRoute('admin');
         }
@@ -225,9 +223,7 @@ class EditorController extends AbstractActionController
             return $response;
         }
 
-        $filename = $media->filename();
-        $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
-        if (!in_array($extension, ['elpx', 'zip'])) {
+        if (!ElpFileService::isExeLearningMedia($media)) {
             $response = $this->getResponse();
             $response->setStatusCode(400);
             $response->setContent('Not an eXeLearning file');

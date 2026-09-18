@@ -445,6 +445,7 @@ class EditorControllerTest extends TestCase
                     public function getScheme(): string { return 'https'; }
                     public function getHost(): string { return 'example.com'; }
                     public function getPort(): ?int { return null; }
+                    public function getPath(): string { return '/omeka-s/admin/exelearning/editor/edit/123'; }
                 };
             }
             public function getBasePath(): string { return '/omeka-s'; }
@@ -487,6 +488,7 @@ class EditorControllerTest extends TestCase
                     public function getScheme(): string { return 'https'; }
                     public function getHost(): string { return 'example.com'; }
                     public function getPort(): ?int { return 443; }
+                    public function getPath(): string { return '/admin/exelearning/editor/edit/123'; }
                 };
             }
             public function getBasePath(): string { return ''; }
@@ -527,6 +529,7 @@ class EditorControllerTest extends TestCase
                     public function getScheme(): string { return 'http'; }
                     public function getHost(): string { return 'localhost'; }
                     public function getPort(): ?int { return 8080; }
+                    public function getPath(): string { return '/omeka-s/admin/exelearning/editor/edit/123'; }
                 };
             }
             public function getBasePath(): string { return '/omeka-s'; }
@@ -571,6 +574,7 @@ class EditorControllerTest extends TestCase
                     public function getScheme(): string { return 'https'; }
                     public function getHost(): string { return 'example.com'; }
                     public function getPort(): ?int { return null; }
+                    public function getPath(): string { return '/admin/exelearning/editor/edit/123'; }
                 };
             }
             public function getBasePath(): string { return ''; }

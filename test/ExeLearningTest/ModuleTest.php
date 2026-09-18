@@ -64,34 +64,140 @@ class ModuleTest extends TestCase
         $this->assertArrayHasKey('router', $config);
     }
 
-    public function testGetDataPathPointsInsideTheModule(): void
+    public function testRendererIsRegisteredWhereOmekaResolvesTheRendererColumn(): void
     {
-        $module = new TestableModule();
-        $this->assertStringEndsWith('/data/exelearning', $module->getDataPath());
+        // handleMediaHydrate() writes 'exelearning_renderer' into the media's
+        // `renderer` column, and Omeka resolves that column through
+        // Omeka\Media\Renderer\Manager -- i.e. `media_renderers`. Registering
+        // it only under `file_renderers` left the name unresolvable, so Omeka
+        // substituted a Fallback renderer that returns an empty string and
+        // $media->render() produced nothing at all.
+        $config = (new TestableModule())->getConfig();
+
+        $this->assertArrayHasKey('media_renderers', $config);
+        $this->assertSame(
+            \ExeLearning\Media\FileRenderer\ExeLearningRendererFactory::class,
+            $config['media_renderers']['factories']['exelearning_renderer']
+        );
+    }
+
+    public function testRendererSatisfiesTheInterfaceThatManagerEnforces(): void
+    {
+        // Omeka\Media\Renderer\Manager sets $instanceOf to this interface and
+        // only catches ServiceNotFoundException, so registering a renderer that
+        // does not implement it is an uncaught InvalidServiceException, not a
+        // silent fallback. The two registrations must stay in step.
+        $this->assertTrue(is_subclass_of(
+            \ExeLearning\Media\FileRenderer\ExeLearningRenderer::class,
+            \Omeka\Media\Renderer\RendererInterface::class
+        ));
+        $this->assertTrue(is_subclass_of(
+            \ExeLearning\Media\FileRenderer\ExeLearningRenderer::class,
+            \Omeka\Media\FileRenderer\RendererInterface::class
+        ));
+    }
+
+    public function testFileRendererAliasesClaimOnlyTheElpxExtension(): void
+    {
+        // These aliases are a single namespace shared by every installed module.
+        // Claiming application/octet-stream or zip took over file types
+        // belonging to the rest of the installation and collided with other
+        // viewer modules that claim the same generic types.
+        $aliases = (new TestableModule())->getConfig()['file_renderers']['aliases'];
+
+        $this->assertSame(['elpx' => 'exelearning_renderer'], $aliases);
     }
 
     // ------------------------------------------------------------- lifecycle
 
-    public function testInstallWhitelistsExelearningTypesAndCreatesDataDirectory(): void
+    public function testInstallWhitelistsOnlyWhatElpxNeeds(): void
     {
         $settings = new Settings();
+        $settings->set('media_type_whitelist', ['image/png']);
+        $settings->set('extension_whitelist', ['png']);
         $services = new TestServiceLocator(['Omeka\Settings' => $settings]);
         $module = new TestableModule($services);
-        $module->setDataPathOverride($this->makeTmpDir() . '/data');
 
         $module->install($services);
 
         $mediaTypes = $settings->get('media_type_whitelist');
         $this->assertContains('application/zip', $mediaTypes);
         $this->assertContains('application/x-zip-compressed', $mediaTypes);
-        $this->assertContains('application/octet-stream', $mediaTypes);
+        $this->assertNotContains(
+            'application/octet-stream',
+            $mediaTypes,
+            'octet-stream matches any unidentified binary and must not be whitelisted installation-wide'
+        );
 
         $extensions = $settings->get('extension_whitelist');
         $this->assertContains('elpx', $extensions);
-        $this->assertContains('zip', $extensions);
+        $this->assertNotContains('zip', $extensions, 'zip belongs to the rest of the installation');
 
-        $this->assertDirectoryExists($module->getDataPath());
         $this->assertNotEmpty(Messenger::SUCCESS);
+    }
+
+    public function testInstallRecordsItsOwnAdditionsSoUninstallCanRevertThem(): void
+    {
+        $settings = new Settings();
+        // The site already allows application/zip; only the other entry is ours.
+        $settings->set('media_type_whitelist', ['image/png', 'application/zip']);
+        $settings->set('extension_whitelist', ['png', 'elpx']);
+        $services = new TestServiceLocator(['Omeka\Settings' => $settings]);
+        $module = new TestableModule($services);
+
+        $module->install($services);
+
+        $this->assertSame([
+            'media_type_whitelist' => ['application/x-zip-compressed'],
+            'extension_whitelist' => [],
+        ], $settings->get('exelearning_whitelist_additions'));
+    }
+
+    public function testUninstallRevertsOnlyTheModulesOwnWhitelistAdditions(): void
+    {
+        $settings = new Settings();
+        $settings->set('media_type_whitelist', ['image/png', 'application/zip']);
+        $settings->set('extension_whitelist', ['png', 'elpx']);
+        $services = new TestServiceLocator(['Omeka\Settings' => $settings]);
+        $module = new TestableModule($services);
+
+        $module->install($services);
+        $module->uninstall($services);
+
+        $this->assertSame(
+            ['image/png', 'application/zip'],
+            $settings->get('media_type_whitelist'),
+            'entries the site had before install must survive uninstall'
+        );
+        $this->assertSame(['png', 'elpx'], $settings->get('extension_whitelist'));
+        $this->assertNull($settings->get('exelearning_whitelist_additions'));
+    }
+
+    public function testUpdateWhitelistLeavesAnUnconfiguredListAlone(): void
+    {
+        // Omeka's file validator reads an empty whitelist as "allow nothing",
+        // so writing one back would break every upload on the site.
+        $settings = new Settings();
+        $services = new TestServiceLocator(['Omeka\Settings' => $settings]);
+        $module = new TestableModule($services);
+
+        $module->callUpdateWhitelist($services);
+
+        $this->assertNull($settings->get('media_type_whitelist'));
+        $this->assertNull($settings->get('extension_whitelist'));
+    }
+
+    public function testUninstallToleratesMissingOrMalformedAdditionRecord(): void
+    {
+        $settings = new Settings();
+        $settings->set('media_type_whitelist', ['image/png']);
+        $settings->set('exelearning_whitelist_additions', 'not-an-array');
+        $services = new TestServiceLocator(['Omeka\Settings' => $settings]);
+        $module = new TestableModule($services);
+
+        $module->uninstall($services);
+
+        $this->assertSame(['image/png'], $settings->get('media_type_whitelist'));
     }
 
     public function testInstallPreservesExistingWhitelistEntriesWithoutDuplicating(): void
@@ -118,20 +224,6 @@ class ModuleTest extends TestCase
         ));
     }
 
-    public function testCreateDataDirectoryIsIdempotent(): void
-    {
-        $module = new TestableModule();
-        $dir = $this->makeTmpDir() . '/nested/data';
-        $module->setDataPathOverride($dir);
-
-        $module->callCreateDataDirectory();
-        $this->assertDirectoryExists($dir);
-
-        // Second call must not warn or fail on the existing directory.
-        $module->callCreateDataDirectory();
-        $this->assertDirectoryExists($dir);
-    }
-
     public function testUninstallDropsLegacyEditorInstallerSettings(): void
     {
         $settings = new RecordingSettings();
@@ -142,7 +234,9 @@ class ModuleTest extends TestCase
 
         $this->assertContains('exelearning_editor_installed_version', $settings->deleted);
         $this->assertContains('exelearning_editor_install_error', $settings->deleted);
-        $this->assertCount(8, $settings->deleted);
+        // Eight legacy editor-installer keys, plus the whitelist-additions
+        // record uninstall takes back with it.
+        $this->assertCount(9, $settings->deleted);
     }
 
     public function testUpgradeDropsTheSameLegacySettings(): void
@@ -153,6 +247,8 @@ class ModuleTest extends TestCase
 
         $module->upgrade('1.0.0', '1.1.0', $services);
 
+        // Only the legacy editor-installer keys: an upgrade must not revert the
+        // whitelist entries the module still needs.
         $this->assertCount(8, $settings->deleted);
     }
 
@@ -208,9 +304,9 @@ class ModuleTest extends TestCase
     {
         return [
             'elpx' => ['course.elpx', true],
-            'zip' => ['course.zip', true],
+            'zip is no longer claimed' => ['course.zip', false],
             'uppercase elpx' => ['COURSE.ELPX', true],
-            'mixed case zip' => ['Course.Zip', true],
+            'mixed case zip' => ['Course.Zip', false],
             'pdf' => ['course.pdf', false],
             'no extension' => ['course', false],
             'empty filename' => ['', false],
@@ -465,10 +561,9 @@ class ModuleTest extends TestCase
 
         $this->assertStringContainsString('partial:exelearning/admin/media-show', $output);
         $this->assertSame('exelearning/admin/media-show', $view->partials[0]['name']);
-        $this->assertSame(
-            '/exelearning/content/abc/index.html?exe-teacher=1',
-            $view->partials[0]['vars']['contentPath']
-        );
+        $this->assertSame($media, $view->partials[0]['vars']['media']);
+        $this->assertNull($view->partials[0]['vars']['processingError']);
+        $this->assertSame(0, $elp->processCalls, 'a processed package must not be re-extracted');
     }
 
     public function testHandleAdminMediaShowAutoProcessesUnprocessedMedia(): void
@@ -488,16 +583,13 @@ class ModuleTest extends TestCase
         ob_end_clean();
 
         $this->assertSame(1, $elp->processCalls);
-        $this->assertSame(
-            '/exelearning/content/fresh/index.html',
-            $view->partials[0]['vars']['contentPath']
-        );
+        $this->assertNull($view->partials[0]['vars']['processingError']);
     }
 
-    public function testHandleAdminMediaShowSwallowsProcessingFailures(): void
+    public function testHandleAdminMediaShowReportsProcessingFailuresInsteadOfRenderingNothing(): void
     {
         $elp = new FakeElpFileService(null, false, false, false);
-        $elp->processException = new \RuntimeException('corrupt archive');
+        $elp->processException = new \RuntimeException('Media file not found: /srv/original/a.elpx');
         $logger = new Logger();
         $view = new PhpRenderer();
         $view->resource = $this->makeMedia('course.elpx', 9);
@@ -509,14 +601,39 @@ class ModuleTest extends TestCase
 
         ob_start();
         $module->handleAdminMediaShow(new Event('view.show.after', $view));
-        $output = (string) ob_get_clean();
+        ob_end_clean();
 
-        $this->assertSame('', $output);
-        $this->assertSame([], $view->partials);
-        $this->assertStringContainsString('corrupt archive', $this->lastMessage($logger, 'err'));
+        $this->assertStringContainsString('Media file not found', $this->lastMessage($logger, 'err'));
+        $this->assertSame(
+            'Media file not found: /srv/original/a.elpx',
+            $view->partials[0]['vars']['processingError'],
+            'the admin must see why the package has no preview, not only the log'
+        );
     }
 
-    public function testHandleAdminMediaShowSkipsNonExeLearningAndPreviewlessMedia(): void
+    public function testHandleAdminMediaShowDoesNotRetryAFailedMediaOnEveryView(): void
+    {
+        // The whole point of the failure marker: an unreadable file used to be
+        // re-extracted, and re-logged, on every single render.
+        $elp = new FakeElpFileService(null, false, false, false);
+        $elp->processingError = 'Media file not found';
+        $view = new PhpRenderer();
+        $view->resource = $this->makeMedia('course.elpx', 9);
+
+        $module = new TestableModule(new TestServiceLocator([
+            'Omeka\Logger' => new Logger(),
+            ElpFileService::class => $elp,
+        ]));
+
+        ob_start();
+        $module->handleAdminMediaShow(new Event('view.show.after', $view));
+        ob_end_clean();
+
+        $this->assertSame(0, $elp->processCalls);
+        $this->assertSame('Media file not found', $view->partials[0]['vars']['processingError']);
+    }
+
+    public function testHandleAdminMediaShowSkipsNonExeLearningMedia(): void
     {
         $view = new PhpRenderer();
         $view->resource = $this->makeMedia('photo.png');
@@ -525,108 +642,84 @@ class ModuleTest extends TestCase
         ob_start();
         $module->handleAdminMediaShow(new Event('view.show.after', $view));
         $this->assertSame('', (string) ob_get_clean());
-
-        // Processed, but the package carries no index.html to show.
-        $view = new PhpRenderer();
-        $view->resource = $this->makeMedia('course.elpx');
-        $module = new TestableModule(new TestServiceLocator([
-            'Omeka\Logger' => new Logger(),
-            ElpFileService::class => new FakeElpFileService('abc', false, false, true),
-        ]));
-
-        ob_start();
-        $module->handleAdminMediaShow(new Event('view.show.after', $view));
-        $this->assertSame('', (string) ob_get_clean());
     }
 
-    public function testHandlePublicItemShowRendersEveryExeLearningMediaInTheItem(): void
+    // --------------------------------------------- public item show (S3 shim)
+
+    public function testHandlePublicItemShowRendersMediaWhenTheItemPageDoesNot(): void
     {
+        // Omeka S 3 with item_media_embed off: core renders no media at all, so
+        // the module must, through the same renderer the rest of Omeka uses.
         $exe = $this->makeMedia('course.elpx', 1);
+        $exe->rendered = '<div class="exelearning-viewer"></div>';
         $other = $this->makeMedia('photo.png', 2);
         $view = new PhpRenderer();
         $view->item = new FakeItem([$exe, $other]);
 
-        $module = new TestableModule(new TestServiceLocator([
-            'Omeka\Logger' => new Logger(),
-            ElpFileService::class => new FakeElpFileService('h', true, true, true),
-        ]));
-
-        ob_start();
-        $module->handlePublicItemShow(new Event('view.show.after', $view));
-        ob_end_clean();
-
-        $this->assertCount(1, $view->partials, 'only the eXeLearning media may render');
-        $this->assertSame('exelearning/public/item-show', $view->partials[0]['name']);
-    }
-
-    public function testHandlePublicItemShowContinuesAfterAProcessingFailure(): void
-    {
-        $view = new PhpRenderer();
-        $view->item = new FakeItem([$this->makeMedia('a.elpx', 1), $this->makeMedia('b.elpx', 2)]);
-
-        $elp = new FakeElpFileService(null, false, false, false);
-        $elp->processException = new \RuntimeException('boom');
-        $logger = new Logger();
-
-        $module = new TestableModule(new TestServiceLocator([
-            'Omeka\Logger' => $logger,
-            ElpFileService::class => $elp,
-        ]));
-
-        ob_start();
-        $module->handlePublicItemShow(new Event('view.show.after', $view));
-        ob_end_clean();
-
-        $this->assertSame([], $view->partials);
-        // Both media were attempted: the failure of the first must not abort.
-        $this->assertSame(2, $elp->processCalls);
-    }
-
-    public function testHandlePublicItemShowAutoProcessesAndUsesTheFreshResult(): void
-    {
-        $view = new PhpRenderer();
-        $view->item = new FakeItem([$this->makeMedia('course.elpx', 1)]);
-
-        $elp = new FakeElpFileService('stale', false, false, false);
-        $elp->processResult = ['hash' => 'fresh', 'hasPreview' => true];
-
-        $module = new TestableModule(new TestServiceLocator([
-            'Omeka\Logger' => new Logger(),
-            ElpFileService::class => $elp,
-        ]));
-
-        ob_start();
-        $module->handlePublicItemShow(new Event('view.show.after', $view));
-        ob_end_clean();
-
-        $this->assertSame(1, $elp->processCalls);
-        $this->assertSame(
-            '/exelearning/content/fresh/index.html',
-            $view->partials[0]['vars']['contentPath'],
-            'the hash returned by processing must win over the stale one'
-        );
-    }
-
-    public function testHandlePublicItemShowSkipsAlreadyProcessedMediaWithoutAPreview(): void
-    {
-        $view = new PhpRenderer();
-        $view->item = new FakeItem([$this->makeMedia('course.elpx', 1)]);
-
-        // Processed, so no re-extraction, but the package has no index.html.
-        $elp = new FakeElpFileService('abc', false, false, true);
-
-        $module = new TestableModule(new TestServiceLocator([
-            'Omeka\Logger' => new Logger(),
-            ElpFileService::class => $elp,
-        ]));
+        $module = new TestableModule(new TestServiceLocator([]));
 
         ob_start();
         $module->handlePublicItemShow(new Event('view.show.after', $view));
         $output = (string) ob_get_clean();
 
-        $this->assertSame('', $output);
-        $this->assertSame([], $view->partials);
-        $this->assertSame(0, $elp->processCalls, 'a processed package must not be re-extracted');
+        $this->assertSame('<div class="exelearning-viewer"></div>', $output);
+        $this->assertSame(1, $exe->renderCalls);
+        $this->assertSame(0, $other->renderCalls, 'only eXeLearning media may render');
+        $this->assertSame([], $view->partials, 'the viewer comes from the renderer, not a partial');
+    }
+
+    public function testHandlePublicItemShowStaysSilentOnOmekaS4(): void
+    {
+        // Omeka S 4 embeds media through resource page blocks, which are on by
+        // default; rendering here as well would show the viewer twice.
+        $exe = $this->makeMedia('course.elpx', 1);
+        $exe->rendered = '<div class="exelearning-viewer"></div>';
+        $view = new PhpRenderer();
+        $view->item = new FakeItem([$exe]);
+        $view->availableHelpers = ['resourcePageBlocks'];
+
+        $module = new TestableModule(new TestServiceLocator([]));
+
+        ob_start();
+        $module->handlePublicItemShow(new Event('view.show.after', $view));
+        $this->assertSame('', (string) ob_get_clean());
+        $this->assertSame(0, $exe->renderCalls);
+    }
+
+    public function testHandlePublicItemShowStaysSilentWhenTheSiteEmbedsMediaItself(): void
+    {
+        $exe = $this->makeMedia('course.elpx', 1);
+        $exe->rendered = '<div class="exelearning-viewer"></div>';
+        $view = new PhpRenderer();
+        $view->item = new FakeItem([$exe]);
+        $view->siteSettings = ['item_media_embed' => true];
+
+        $module = new TestableModule(new TestServiceLocator([]));
+
+        ob_start();
+        $module->handlePublicItemShow(new Event('view.show.after', $view));
+        $this->assertSame('', (string) ob_get_clean());
+        $this->assertSame(0, $exe->renderCalls);
+    }
+
+    public function testHandlePublicItemShowDoesNotWriteDuringTheRender(): void
+    {
+        // Extraction used to run inline here, mutating state in a GET request.
+        $exe = $this->makeMedia('course.elpx', 1);
+        $elp = new FakeElpFileService(null, false, false, false);
+        $view = new PhpRenderer();
+        $view->item = new FakeItem([$exe]);
+
+        $module = new TestableModule(new TestServiceLocator([
+            'Omeka\Logger' => new Logger(),
+            ElpFileService::class => $elp,
+        ]));
+
+        ob_start();
+        $module->handlePublicItemShow(new Event('view.show.after', $view));
+        ob_end_clean();
+
+        $this->assertSame(0, $elp->processCalls);
     }
 
     public function testHandlePublicItemShowIgnoresAnItemlessView(): void
@@ -754,12 +847,25 @@ class ModuleTest extends TestCase
 
     public function testHandleMediaHydrateFallsBackToSourceWhenFilenameIsAbsent(): void
     {
-        $entity = new FakeSourceOnlyEntity('course.zip');
+        $entity = new FakeSourceOnlyEntity('course.elpx');
         $module = new TestableModule();
 
         $module->handleMediaHydrate(new Event('api.hydrate.post', null, ['entity' => $entity]));
 
         $this->assertSame('exelearning_renderer', $entity->renderer);
+    }
+
+    public function testHandleMediaHydrateNoLongerClaimsPlainZipUploads(): void
+    {
+        // file_renderers/media_renderers aliases are one namespace shared by
+        // every installed module; stamping this module's renderer onto every
+        // .zip took over a file type belonging to the rest of the site.
+        $entity = new FakeMediaEntity('archive.zip', 30, []);
+        $module = new TestableModule();
+
+        $module->handleMediaHydrate(new Event('api.hydrate.post', null, ['entity' => $entity]));
+
+        $this->assertNull($entity->renderer);
     }
 
     public function testHandleMediaHydrateLeavesOtherFileTypesAlone(): void
@@ -859,40 +965,58 @@ class ModuleTest extends TestCase
 
     public function testHandleMediaDeleteRemovesTheExtractionDirectory(): void
     {
-        $root = $this->makeTmpDir();
-        mkdir($root . '/hash-1/sub', 0777, true);
-        file_put_contents($root . '/hash-1/sub/f.txt', 'x');
-
-        $module = new TestableModule(new TestServiceLocator(['Omeka\Logger' => new Logger()]));
-        $module->setDataPathOverride($root);
+        // The extraction root belongs to ElpFileService, which derives it from
+        // Omeka's files directory. Module used to delete
+        // <module>/data/exelearning/<hash> instead -- a path nothing ever wrote
+        // to -- so every deleted media left its package on disk.
+        $elp = new FakeElpFileService(null, false, false, true);
+        $module = new TestableModule(new TestServiceLocator([
+            'Omeka\Logger' => new Logger(),
+            ElpFileService::class => $elp,
+        ]));
 
         $entity = new FakeMediaEntity('course.elpx', 21, ['exelearning_extracted_hash' => 'hash-1']);
         $module->handleMediaDelete(new Event('api.delete.pre', null, ['entity' => $entity]));
 
-        $this->assertDirectoryDoesNotExist($root . '/hash-1');
+        $this->assertSame(['hash-1'], $elp->cleanedHashes);
+    }
+
+    public function testHandleMediaDeleteCleansUpLegacyZipPackagesToo(): void
+    {
+        // A package uploaded as .zip under the old rule still carries the
+        // module's hash, and its extracted content must still be removed.
+        $elp = new FakeElpFileService(null, false, false, true);
+        $module = new TestableModule(new TestServiceLocator([
+            'Omeka\Logger' => new Logger(),
+            ElpFileService::class => $elp,
+        ]));
+
+        $entity = new FakeMediaEntity('legacy.zip', 25, ['exelearning_extracted_hash' => 'hash-z']);
+        $module->handleMediaDelete(new Event('api.delete.pre', null, ['entity' => $entity]));
+
+        $this->assertSame(['hash-z'], $elp->cleanedHashes);
     }
 
     public function testHandleMediaDeleteIgnoresIrrelevantEntities(): void
     {
         $logger = new Logger();
-        $module = new TestableModule(new TestServiceLocator(['Omeka\Logger' => $logger]));
-        $module->setDataPathOverride($this->makeTmpDir());
+        $elp = new FakeElpFileService(null, false, false, true);
+        $module = new TestableModule(new TestServiceLocator([
+            'Omeka\Logger' => $logger,
+            ElpFileService::class => $elp,
+        ]));
 
         // No entity at all.
         $module->handleMediaDelete(new Event('api.delete.pre', null, ['entity' => null]));
-        // A media that is not an eXeLearning package.
+        // A media that was never extracted by this module.
         $module->handleMediaDelete(new Event('api.delete.pre', null, [
-            'entity' => new FakeMediaEntity('photo.png', 22, ['exelearning_extracted_hash' => 'nope']),
+            'entity' => new FakeMediaEntity('photo.png', 22, []),
         ]));
-        // An eXeLearning media that was never extracted.
         $module->handleMediaDelete(new Event('api.delete.pre', null, [
             'entity' => new FakeMediaEntity('course.elpx', 23, []),
         ]));
-        // A filename-less entity.
-        $module->handleMediaDelete(new Event('api.delete.pre', null, [
-            'entity' => new FakeMediaEntity('', 24, []),
-        ]));
 
+        $this->assertSame([], $elp->cleanedHashes);
         $this->assertSame([], array_filter($logger->getMessages(), function (array $m) {
             return $m['level'] === 'err';
         }));
@@ -904,7 +1028,7 @@ class ModuleTest extends TestCase
         $module = new TestableModule(new TestServiceLocator(['Omeka\Logger' => $logger]));
 
         $entity = new class {
-            public function getId(): int
+            public function getData(): array
             {
                 throw new \RuntimeException('entity detached');
             }

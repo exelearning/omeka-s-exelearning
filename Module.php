@@ -25,6 +25,22 @@ class Module extends AbstractModule
     /** @var string */
     const NAMESPACE = __NAMESPACE__;
 
+    /** Setting holding the whitelist entries this module added at install. */
+    const SETTING_WHITELIST_ADDITIONS = 'exelearning_whitelist_additions';
+
+    /**
+     * What an .elpx upload needs, and nothing else.
+     *
+     * `application/octet-stream` used to be whitelisted here. It matches any
+     * unidentified binary, so adding it let anyone who can add media upload
+     * arbitrary files to the whole installation — far beyond what this module
+     * needs, and it was never taken back on uninstall.
+     */
+    const WHITELIST_ADDITIONS = [
+        'media_type_whitelist' => ['application/zip', 'application/x-zip-compressed'],
+        'extension_whitelist' => ['elpx'],
+    ];
+
     /**
      * Retrieve the configuration array.
      *
@@ -48,9 +64,6 @@ class Module extends AbstractModule
 
         // Register eXeLearning file types
         $this->updateWhitelist($serviceLocator);
-
-        // Create data directory for extracted content
-        $this->createDataDirectory();
     }
 
     /**
@@ -62,43 +75,71 @@ class Module extends AbstractModule
     {
         $settings = $serviceLocator->get('Omeka\Settings');
 
-        // Register MIME types for ZIP files
-        $whitelist = $settings->get('media_type_whitelist', []);
-        $whitelist = array_values(array_unique(array_merge(array_values($whitelist), [
-            'application/zip',
-            'application/x-zip-compressed',
-            'application/octet-stream',
-        ])));
-        $settings->set('media_type_whitelist', $whitelist);
-
-        // Register .elpx extension
-        $whitelist = $settings->get('extension_whitelist', []);
-        $whitelist = array_values(array_unique(array_merge(array_values($whitelist), [
-            'elpx',
-            'zip',
-        ])));
-        $settings->set('extension_whitelist', $whitelist);
-    }
-
-    /**
-     * Create the data directory for extracted eXeLearning content.
-     */
-    protected function createDataDirectory(): void
-    {
-        $basePath = $this->getDataPath();
-        if (!is_dir($basePath)) {
-            @mkdir($basePath, 0755, true);
+        $added = [];
+        foreach (self::WHITELIST_ADDITIONS as $key => $values) {
+            $added[$key] = $this->addToWhitelist($settings, $key, $values);
         }
+
+        // Remember exactly what this module contributed, so uninstall can take
+        // back its own additions without removing entries the site already had.
+        $settings->set(self::SETTING_WHITELIST_ADDITIONS, $added);
     }
 
     /**
-     * Get the path to the data directory.
+     * Add missing values to one Omeka whitelist, returning the ones added.
      *
-     * @return string
+     * @param object $settings
+     * @param string $key
+     * @param string[] $values
+     * @return string[]
      */
-    public function getDataPath(): string
+    protected function addToWhitelist($settings, string $key, array $values): array
     {
-        return __DIR__ . '/data/exelearning';
+        $whitelist = array_values((array) $settings->get($key, []));
+
+        // An empty whitelist means "allow nothing" to Omeka's file validator,
+        // never "not configured". Writing one back would break every upload on
+        // the site, so leave an unconfigured key alone.
+        if (!$whitelist) {
+            return [];
+        }
+
+        $added = array_values(array_diff($values, $whitelist));
+        if (!$added) {
+            return [];
+        }
+
+        $settings->set($key, array_values(array_merge($whitelist, $added)));
+
+        return $added;
+    }
+
+    /**
+     * Remove this module's own whitelist additions.
+     *
+     * @param ServiceLocatorInterface $serviceLocator
+     */
+    protected function revertWhitelist(ServiceLocatorInterface $serviceLocator): void
+    {
+        $settings = $serviceLocator->get('Omeka\Settings');
+
+        $added = $settings->get(self::SETTING_WHITELIST_ADDITIONS, []);
+        if (!is_array($added)) {
+            $added = [];
+        }
+
+        foreach ($added as $key => $values) {
+            if (!is_string($key) || !is_array($values) || !$values) {
+                continue;
+            }
+            $whitelist = array_values((array) $settings->get($key, []));
+            if (!$whitelist) {
+                continue;
+            }
+            $settings->set($key, array_values(array_diff($whitelist, $values)));
+        }
+
+        $settings->delete(self::SETTING_WHITELIST_ADDITIONS);
     }
 
     /**
@@ -112,6 +153,7 @@ class Module extends AbstractModule
         $message = new Message("ExeLearning module uninstalled.");
         $messenger->addWarning($message);
 
+        $this->revertWhitelist($serviceLocator);
         $this->removeEditorInstallerSettings($serviceLocator);
     }
 
@@ -196,7 +238,7 @@ class Module extends AbstractModule
             [$this, 'handleViewLayout']
         );
 
-        // Inject iframe viewer in public item show page
+        // Compatibility shim for item pages that never call $media->render().
         $sharedEventManager->attach(
             'Omeka\Controller\Site\Item',
             'view.show.after',
@@ -247,7 +289,15 @@ class Module extends AbstractModule
     }
 
     /**
-     * Handle public item show view - inject iframe viewer for eXeLearning media.
+     * Render eXeLearning media on item pages that core would otherwise skip.
+     *
+     * The viewer itself lives in ExeLearningRenderer, reached through
+     * $media->render(). Omeka S 4 calls that for every media via the
+     * `mediaEmbeds` resource page block, which is on by default; Omeka S 3 only
+     * calls it when the `item_media_embed` site setting is enabled, and that
+     * setting defaults to off. On such a site the item page would show no
+     * viewer at all, so this hook renders it — and only then, so a page that
+     * already embedded the media does not show it twice.
      *
      * @param Event $event
      */
@@ -256,55 +306,49 @@ class Module extends AbstractModule
         $view = $event->getTarget();
         $item = $view->item;
 
-        if (!$item) {
+        if (!$item || $this->itemPageEmbedsMedia($view)) {
             return;
         }
 
-        $services = $this->getServiceLocator();
-        $logger = $services->get('Omeka\Logger');
-        $elpService = $services->get(Service\ElpFileService::class);
-
-        // Find eXeLearning media in this item
         foreach ($item->media() as $media) {
-            if (!$this->isExeLearningFile($media)) {
-                continue;
+            if ($this->isExeLearningFile($media)) {
+                echo $media->render();
             }
-
-            $hash = $elpService->getMediaHash($media);
-            $hasPreview = $elpService->hasPreview($media);
-
-            // Auto-process once. Gate on the processed marker (not hasPreview)
-            // so a legitimately preview-less package is not re-extracted on
-            // every view, which would accumulate orphan extraction directories.
-            if (!$elpService->isProcessed($media)) {
-                $logger->info(sprintf('[ExeLearning] Auto-processing media %d on public view', $media->id()));
-                try {
-                    $result = $elpService->processUploadedFile($media);
-                    $hash = $result['hash'];
-                    $hasPreview = $result['hasPreview'];
-                } catch (\Throwable $e) {
-                    $logger->err(sprintf('[ExeLearning] Auto-process failed: %s', $e->getMessage()));
-                    continue;
-                }
-            }
-
-            if (!$hash || !$hasPreview) {
-                continue;
-            }
-
-            // Pass the relative content path; JS constructs the full URL from
-            // window.location so the playground SW scope prefix is always included.
-            $contentPath = $this->buildContentPath($hash, $media);
-
-            echo $view->partial('exelearning/public/item-show', [
-                'media' => $media,
-                'contentPath' => $contentPath,
-            ]);
         }
     }
 
     /**
-     * Handle admin media show view - inject iframe viewer for eXeLearning files.
+     * Whether this item page already renders its media itself.
+     *
+     * @param mixed $view
+     * @return bool
+     */
+    protected function itemPageEmbedsMedia($view): bool
+    {
+        try {
+            // Omeka S 4 registers this helper and embeds media through resource
+            // page blocks; Omeka S 3 has no such helper.
+            if ($view->getHelperPluginManager()->has('resourcePageBlocks')) {
+                return true;
+            }
+
+            return (bool) $view->siteSetting('item_media_embed', false);
+        } catch (\Throwable $e) {
+            // Without a usable view we cannot tell; rendering nothing is safer
+            // than rendering the viewer twice.
+            return true;
+        }
+    }
+
+    /**
+     * Handle admin media show view.
+     *
+     * The viewer is rendered by ExeLearningRenderer, which core's admin media
+     * template reaches through $media->render() before this event fires. What is
+     * left for the hook is the editor modal the toolbar's edit button opens, and
+     * the extraction repair path: an .elpx uploaded while the files directory
+     * resolved to the wrong place never got processed, and opening it in admin
+     * is where that is noticed and fixed.
      *
      * @param Event $event
      */
@@ -321,34 +365,31 @@ class Module extends AbstractModule
         $logger = $services->get('Omeka\Logger');
         $elpService = $services->get(Service\ElpFileService::class);
 
-        $hash = $elpService->getMediaHash($media);
-        $hasPreview = $elpService->hasPreview($media);
+        // $media is a snapshot taken before this request, so track the outcome
+        // here rather than re-reading it after a write.
+        $processingError = $elpService->getProcessingError($media);
 
-        // Auto-process once (gate on the processed marker, not hasPreview).
-        if (!$elpService->isProcessed($media)) {
+        // Auto-process once. Gate on the processed marker (not hasPreview), and
+        // skip a media whose last attempt failed: without that, an unreadable
+        // file is re-extracted and re-logged on every single render, forever.
+        if (!$elpService->isProcessed($media) && $processingError === null) {
             $logger->info(sprintf('[ExeLearning] Auto-processing media %d on view', $media->id()));
             try {
                 $result = $elpService->processUploadedFile($media);
-                $hash = $result['hash'];
-                $hasPreview = $result['hasPreview'];
-                $logger->info(sprintf('[ExeLearning] Auto-process complete: hash=%s, hasPreview=%s', $hash, $hasPreview ? 'yes' : 'no'));
+                $logger->info(sprintf(
+                    '[ExeLearning] Auto-process complete: hash=%s, hasPreview=%s',
+                    $result['hash'],
+                    $result['hasPreview'] ? 'yes' : 'no'
+                ));
             } catch (\Throwable $e) {
-                $logger->err(sprintf('[ExeLearning] Auto-process failed: %s', $e->getMessage()));
-                return;
+                $processingError = $e->getMessage();
+                $logger->err(sprintf('[ExeLearning] Auto-process failed: %s', $processingError));
             }
         }
 
-        if (!$hash || !$hasPreview) {
-            return;
-        }
-
-        // Pass the relative content path; JS constructs the full URL from
-        // window.location so the playground SW scope prefix is always included.
-        $contentPath = $this->buildContentPath($hash, $media);
-
         echo $view->partial('exelearning/admin/media-show', [
             'media' => $media,
-            'contentPath' => $contentPath,
+            'processingError' => $processingError,
         ]);
     }
 
@@ -398,7 +439,7 @@ class Module extends AbstractModule
             return false;
         }
         var lower = String(filename).toLowerCase();
-        return lower.endsWith('.elpx') || lower.endsWith('.zip');
+        return lower.endsWith('.elpx');
     }
 
     function getMediaIdFromPath() {
@@ -532,8 +573,10 @@ JS
 
         $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
 
-        // Set our renderer for eXeLearning files
-        if (in_array($extension, ['elpx', 'zip'])) {
+        // Set our renderer for eXeLearning files. Only `.elpx`: stamping every
+        // uploaded `.zip` with this module's renderer name took over a file type
+        // belonging to the rest of the installation.
+        if ($extension === 'elpx') {
             if (method_exists($entity, 'setRenderer')) {
                 $entity->setRenderer('exelearning_renderer');
             }
@@ -636,30 +679,18 @@ JS
                 return;
             }
 
-            $mediaId = $entity->getId();
-            $filename = $entity->getFilename();
-
-            if (!$filename) {
-                return;
-            }
-
-            $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
-            if (!in_array($extension, ['elpx', 'zip'])) {
-                return;
-            }
-
-            $logger->info(sprintf('ExeLearning: Cleaning up media %d', $mediaId));
-
-            // Get the hash from entity data
             $data = $entity->getData();
-            $hash = $data['exelearning_extracted_hash'] ?? null;
-
-            if ($hash) {
-                $basePath = $this->getDataPath();
-                $extractPath = $basePath . '/' . $hash;
-                $this->deleteDirectory($extractPath);
-                $logger->info(sprintf('ExeLearning: Deleted extracted content at %s', $extractPath));
+            $hash = is_array($data) ? ($data['exelearning_extracted_hash'] ?? null) : null;
+            if (!$hash) {
+                return;
             }
+
+            // Delegate to the service: it owns the extraction root, which is
+            // derived from Omeka's files directory. This used to delete
+            // <module>/data/exelearning/<hash>, a path nothing ever wrote to, so
+            // every deleted media left its extracted package on disk.
+            $services->get(Service\ElpFileService::class)->cleanupMediaByHash($hash);
+            $logger->info(sprintf('ExeLearning: Cleaned up extracted content for media %d', $entity->getId()));
         } catch (\Throwable $e) {
             $logger->err(sprintf(
                 'ExeLearning: Failed to cleanup media: %s',
@@ -776,13 +807,7 @@ JS
 
     protected function isExeLearningFile($media): bool
     {
-        $filename = $media->filename();
-        if (!$filename) {
-            return false;
-        }
-
-        $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
-        return in_array($extension, ['elpx', 'zip']);
+        return Service\ElpFileService::isExeLearningMedia($media);
     }
 
     /**

@@ -17,7 +17,7 @@ Omeka S module for eXeLearning content management. Upload, view and edit eXeLear
 
 ## Features
 
-- **ELPX File Support**: Upload and manage eXeLearning `.elpx` files through Omeka S
+- **ELPX File Support**: Upload and manage eXeLearning `.elpx` files through Omeka S (only `.elpx`; plain `.zip` uploads are left to the rest of the installation)
 - **Automatic Extraction**: ELPX files are automatically extracted and ready to display
 - **Embedded Editor**: Edit eXeLearning content directly from Omeka S without leaving the browser
 - **Automatic Thumbnails**: Generates visual thumbnails from the content's first page

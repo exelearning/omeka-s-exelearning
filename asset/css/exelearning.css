@@ -411,3 +411,28 @@
 @keyframes exelearning-spin {
     to { transform: rotate(360deg); }
 }
+
+/* ==========================================================================
+   Processing failure notice (admin)
+   ========================================================================== */
+
+.exelearning-process-error {
+    margin: 1rem 0;
+    padding: 0.75rem 1rem;
+    border: 1px solid #d63638;
+    border-left-width: 4px;
+    border-radius: 3px;
+    background: #fcf0f1;
+}
+
+.exelearning-process-error p {
+    margin: 0 0 0.5rem;
+}
+
+.exelearning-process-error p:last-child {
+    margin-bottom: 0;
+}
+
+.exelearning-process-error code {
+    word-break: break-all;
+}

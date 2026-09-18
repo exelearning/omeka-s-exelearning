@@ -81,13 +81,46 @@ class ElpFileService
     /**
      * Process an uploaded eXeLearning file.
      *
+     * Records the reason on failure before rethrowing, so the callers that gate
+     * on it (the view hooks) stop retrying an unprocessable file on every
+     * render, and clears a stale reason on success.
+     *
      * @param MediaRepresentation $media
      * @return array Result with hash and hasPreview
+     * @throws \Exception
+     */
+    public function processUploadedFile(MediaRepresentation $media): array
+    {
+        try {
+            $result = $this->doProcessUploadedFile($media);
+        } catch (\Throwable $e) {
+            try {
+                $this->updateMediaData($media, [
+                    'exelearning_process_error' => $e->getMessage(),
+                ]);
+            } catch (\Throwable $ignored) {
+                // Never let bookkeeping mask the real failure.
+            }
+            throw $e;
+        }
+
+        if ($this->hasProcessingError($media)) {
+            $this->updateMediaData($media, ['exelearning_process_error' => '']);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Extract and register an eXeLearning package.
+     *
+     * @param MediaRepresentation $media
+     * @return array
      * @throws \Exception
      *
      * @codeCoverageIgnore
      */
-    public function processUploadedFile(MediaRepresentation $media): array
+    private function doProcessUploadedFile(MediaRepresentation $media): array
     {
         $this->log('info', sprintf('Processing media %d', $media->id()));
 
@@ -268,6 +301,21 @@ class ElpFileService
     {
         $hash = $this->getMediaHash($media);
         if ($hash) {
+            $this->cleanupMediaByHash($hash);
+        }
+    }
+
+    /**
+     * Remove the extraction directory for a hash.
+     *
+     * Takes the hash rather than a representation because `api.delete.pre`
+     * hands the module an entity, which has no representation methods.
+     *
+     * @param string $hash
+     */
+    public function cleanupMediaByHash(string $hash): void
+    {
+        if ($hash !== '') {
             $this->deleteDirectory($this->basePath . '/' . $hash);
         }
     }
@@ -299,6 +347,31 @@ class ElpFileService
         $zip->close();
 
         return $hasContent;
+    }
+
+    /**
+     * Whether a media belongs to this module.
+     *
+     * `.elpx` is the only extension eXeLearning owns. The module used to claim
+     * `.zip` as well, which took over a type belonging to the rest of the
+     * installation — every plain ZIP got this module's renderer stamped on it.
+     * Media the module has already extracted still count, whatever their
+     * extension, so packages uploaded as `.zip` under the old rule keep working
+     * instead of going dark on upgrade.
+     *
+     * @param mixed $media A media representation
+     * @return bool
+     */
+    public static function isExeLearningMedia($media): bool
+    {
+        $filename = $media->filename();
+        if ($filename && strtolower(pathinfo($filename, PATHINFO_EXTENSION)) === 'elpx') {
+            return true;
+        }
+
+        $data = $media->mediaData();
+
+        return is_array($data) && !empty($data['exelearning_extracted_hash']);
     }
 
     /**
@@ -339,6 +412,36 @@ class ElpFileService
     {
         $data = $media->mediaData();
         return ($data['exelearning_processed'] ?? '0') === '1';
+    }
+
+    /**
+     * Why the last processing attempt failed, or null if none did.
+     *
+     * A media whose file cannot be read never reaches the processed marker, so
+     * without this the view hooks retried the extraction — and logged the same
+     * two lines — on every single render, forever. Recording the reason both
+     * stops the retry loop and gives the admin UI something to show.
+     *
+     * @param MediaRepresentation $media
+     * @return string|null
+     */
+    public function getProcessingError(MediaRepresentation $media): ?string
+    {
+        $data = $media->mediaData();
+        $error = $data['exelearning_process_error'] ?? null;
+
+        return is_string($error) && $error !== '' ? $error : null;
+    }
+
+    /**
+     * Whether the last processing attempt failed.
+     *
+     * @param MediaRepresentation $media
+     * @return bool
+     */
+    public function hasProcessingError(MediaRepresentation $media): bool
+    {
+        return $this->getProcessingError($media) !== null;
     }
 
     /**

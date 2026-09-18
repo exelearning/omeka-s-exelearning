@@ -20,9 +20,6 @@ use Laminas\ServiceManager\ServiceLocatorInterface;
  */
 class TestableModule extends Module
 {
-    /** @var string|null Overrides the on-disk data directory during tests. */
-    private $dataPathOverride = null;
-
     public function __construct(?ServiceLocatorInterface $services = null)
     {
         if ($services !== null) {
@@ -30,28 +27,9 @@ class TestableModule extends Module
         }
     }
 
-    /**
-     * Point getDataPath() at a temporary directory so cleanup tests never
-     * touch the checkout's own data/exelearning tree.
-     */
-    public function setDataPathOverride(?string $path): void
-    {
-        $this->dataPathOverride = $path;
-    }
-
-    public function getDataPath(): string
-    {
-        return $this->dataPathOverride ?? parent::getDataPath();
-    }
-
     public function callUpdateWhitelist(ServiceLocatorInterface $services): void
     {
         $this->updateWhitelist($services);
-    }
-
-    public function callCreateDataDirectory(): void
-    {
-        $this->createDataDirectory();
     }
 
     public function callRemoveEditorInstallerSettings(ServiceLocatorInterface $services): void
