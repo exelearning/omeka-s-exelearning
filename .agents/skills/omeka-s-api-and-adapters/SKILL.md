@@ -5,7 +5,7 @@ description: "Use when working with Omeka S's API layer from this module: the ap
 
 # Omeka S API and Adapters
 
-Compatibility: Omeka S >= 3.0. Event identifiers and payload keys follow Omeka S 3.x.
+Compatibility: Omeka S >= 4.0. Event identifiers and payload keys follow Omeka S 4.x.
 
 
 ## When to use

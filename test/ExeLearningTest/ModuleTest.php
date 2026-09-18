@@ -781,23 +781,11 @@ class ModuleTest extends TestCase
     // ------------------------------------ public item show (compatibility shim)
 
     /**
-     * An Omeka S 3 container: a theme manager, but no resource-page blocks.
+     * A container carrying the resolved resource-page block configuration.
      *
      * @param array<string, mixed> $extra
      */
-    private function omekaS3(array $extra = []): TestServiceLocator
-    {
-        return new TestServiceLocator(array_merge([
-            'Omeka\Site\ThemeManager' => new FakeThemeManager(),
-        ], $extra));
-    }
-
-    /**
-     * An Omeka S 4 container, with the resolved block configuration to model.
-     *
-     * @param array<string, mixed> $extra
-     */
-    private function omekaS4(
+    private function omekaWithBlocks(
         ?FakeResourcePageBlockLayoutManager $blocks = null,
         array $extra = []
     ): TestServiceLocator {
@@ -810,11 +798,10 @@ class ModuleTest extends TestCase
     /**
      * @param array<int, object> $media
      */
-    private function itemView(array $media, array $siteSettings = []): PhpRenderer
+    private function itemView(array $media): PhpRenderer
     {
         $view = new PhpRenderer();
         $view->item = new FakeItem($media);
-        $view->siteSettings = $siteSettings;
 
         return $view;
     }
@@ -840,55 +827,28 @@ class ModuleTest extends TestCase
         return (string) ob_get_clean();
     }
 
-    public function testOmekaS3RendersTheViewerWhenTheSiteDoesNotEmbedMedia(): void
-    {
-        // Omeka S 3 gates item-page media on item_media_embed, which defaults
-        // to off, so without this shim the viewer would simply not appear.
-        $exe = $this->renderableElpx();
-
-        $output = $this->runPublicItemShow(
-            $this->omekaS3(),
-            $this->itemView([$exe], ['item_media_embed' => false])
-        );
-
-        $this->assertSame($exe->rendered, $output);
-        $this->assertSame(1, $exe->renderCalls);
-    }
-
-    public function testOmekaS3StaysSilentWhenTheSiteEmbedsMediaItself(): void
-    {
-        $exe = $this->renderableElpx();
-
-        $output = $this->runPublicItemShow(
-            $this->omekaS3(),
-            $this->itemView([$exe], ['item_media_embed' => true])
-        );
-
-        $this->assertSame('', $output);
-        $this->assertSame(0, $exe->renderCalls, 'core already rendered it; a second copy would be a duplicate');
-    }
-
-    public function testOmekaS4StaysSilentWhenMediaEmbedsIsInTheResolvedConfiguration(): void
+    public function testStaysSilentWhenMediaEmbedsIsInTheResolvedConfiguration(): void
     {
         // The default resolved configuration carries mediaEmbeds, so core calls
         // $media->render() and the shim must not render a second viewer.
         $exe = $this->renderableElpx();
 
-        $output = $this->runPublicItemShow($this->omekaS4(), $this->itemView([$exe]));
+        $output = $this->runPublicItemShow($this->omekaWithBlocks(), $this->itemView([$exe]));
 
         $this->assertSame('', $output);
         $this->assertSame(0, $exe->renderCalls);
     }
 
-    public function testOmekaS4RendersTheViewerWhenMediaEmbedsWasRemoved(): void
+    public function testRendersTheViewerWhenMediaEmbedsWasRemoved(): void
     {
         // The case mere helper- or service-existence detection got wrong: the
-        // feature exists, but this site's resolved configuration no longer lists
-        // the block, so core renders no media and the viewer would vanish.
+        // block is always registered, but this site's resolved configuration no
+        // longer lists it, so core renders no media and, without this shim, the
+        // viewer would vanish. This is the only reason the shim still exists.
         $exe = $this->renderableElpx();
 
         $output = $this->runPublicItemShow(
-            $this->omekaS4(FakeResourcePageBlockLayoutManager::withoutMediaEmbeds()),
+            $this->omekaWithBlocks(FakeResourcePageBlockLayoutManager::withoutMediaEmbeds()),
             $this->itemView([$exe])
         );
 
@@ -896,14 +856,14 @@ class ModuleTest extends TestCase
         $this->assertSame(1, $exe->renderCalls);
     }
 
-    public function testOmekaS4HonoursMediaEmbedsDeclaredInANonMainRegion(): void
+    public function testHonoursMediaEmbedsDeclaredInANonMainRegion(): void
     {
         // Themes may declare their own regions; a block anywhere in the item
         // page still means core renders the media.
         $exe = $this->renderableElpx();
 
         $output = $this->runPublicItemShow(
-            $this->omekaS4(FakeResourcePageBlockLayoutManager::withMediaEmbedsInAnotherRegion()),
+            $this->omekaWithBlocks(FakeResourcePageBlockLayoutManager::withMediaEmbedsInAnotherRegion()),
             $this->itemView([$exe])
         );
 
@@ -941,7 +901,7 @@ class ModuleTest extends TestCase
         $zip->rendered = '<a href="archive.zip">archive</a>';
 
         $output = $this->runPublicItemShow(
-            $this->omekaS4(FakeResourcePageBlockLayoutManager::withoutMediaEmbeds()),
+            $this->omekaWithBlocks(FakeResourcePageBlockLayoutManager::withoutMediaEmbeds()),
             $this->itemView([$exe, $other, $zip])
         );
 
@@ -956,7 +916,7 @@ class ModuleTest extends TestCase
         $elp = new FakeElpFileService(null, false, false, false);
 
         $output = $this->runPublicItemShow(
-            $this->omekaS4(FakeResourcePageBlockLayoutManager::withoutMediaEmbeds(), [
+            $this->omekaWithBlocks(FakeResourcePageBlockLayoutManager::withoutMediaEmbeds(), [
                 'Omeka\Logger' => new Logger(),
                 ElpFileService::class => $elp,
             ]),
@@ -991,7 +951,7 @@ class ModuleTest extends TestCase
     {
         $view = new PhpRenderer();
 
-        $this->assertSame('', $this->runPublicItemShow($this->omekaS4(), $view));
+        $this->assertSame('', $this->runPublicItemShow($this->omekaWithBlocks(), $view));
     }
 
     public function testHandleViewLayoutInjectsScriptsOnAdminRoutes(): void

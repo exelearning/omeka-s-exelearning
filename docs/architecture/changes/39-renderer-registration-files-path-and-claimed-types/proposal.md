@@ -69,6 +69,10 @@ by this one.
 
 In scope:
 
+- Narrowing supported Omeka to `^4.0.0`. Omeka S 3 is old, does not embed media
+  on item pages by default, and supporting it meant a second branch in every
+  rendering decision below.
+
 - Resolving Omeka's files directory once, correctly, for every consumer.
 - Recording why an extraction failed, so it is not retried on every render.
 - Removing the extracted package when its media is deleted.
@@ -92,7 +96,6 @@ Out of scope:
   repaired by opening them in admin; media the module no longer recognises are
   not, and that limit is stated in *Non-goals*.
 - A migration for `.zip` media that were never extracted. See *Non-goals*.
-- Dropping Omeka S 3 support. See [ADR-39-01](../../adr/ADR-39-01-render-media-through-the-media-renderer-manager.md).
 - The stale `language/template.pot`, which is missing msgids for code unrelated
   to this change. Regenerating it here would bury this diff.
 
@@ -106,8 +109,7 @@ Out of scope:
 - `$media->render()` for an `.elpx` media returns non-empty HTML containing
   `exelearning-viewer`.
 - The viewer is rendered exactly once per media on both the admin media page and
-  a public item page: on Omeka S 3 whether or not `item_media_embed` is set, and
-  on Omeka S 4 whether or not the site's resolved resource-page block
+  a public item page, whether or not the site's resolved resource-page block
   configuration still contains `mediaEmbeds`.
 - Public rendering performs no extraction and no database write.
 - An unprocessable media is attempted once, not once per render, and the reason

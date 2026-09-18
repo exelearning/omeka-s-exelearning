@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ExeLearningTest\Doubles;
 
 /**
- * Stand-in for Omeka S 4's `Omeka\ResourcePageBlockLayoutManager`.
+ * Stand-in for `Omeka\ResourcePageBlockLayoutManager`.
  *
  * Only `getResourcePageBlocks()` matters here, and it is modelled on the real
  * one: core resolves a site administrator's saved blocks first, then the
@@ -15,8 +15,8 @@ namespace ExeLearningTest\Doubles;
  * that shape -- not the mere existence of the service or the helper -- is what
  * decides whether core renders media on an item page.
  *
- * The service does not exist at all in Omeka S 3, so a test that omits it is
- * modelling Omeka S 3.
+ * Omitting it from the container models a site whose configuration cannot be
+ * read at all, which the module treats as "already embedded".
  */
 class FakeResourcePageBlockLayoutManager
 {

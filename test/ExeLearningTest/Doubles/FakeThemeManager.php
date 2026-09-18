@@ -7,8 +7,8 @@ namespace ExeLearningTest\Doubles;
 /**
  * Stand-in for `Omeka\Site\ThemeManager`.
  *
- * Present in both Omeka S 3 and S 4; only S 4 pairs it with a resource-page
- * block manager, which is the distinction the module probes.
+ * The module asks it for the current theme so the resource-page block manager
+ * can resolve that theme's configuration.
  */
 class FakeThemeManager
 {

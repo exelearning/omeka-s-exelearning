@@ -55,10 +55,10 @@ installed module still has to uninstall cleanly.
   entries the module cannot prove it added.
 - To decide whether a site page already renders media, read Omeka's resolved
   configuration, never the mere existence of a helper or service:
-  `Omeka\ResourcePageBlockLayoutManager` (S4 only) plus
-  `Omeka\Site\ThemeManager::getCurrentTheme()`, exactly as core's
-  `ResourcePageBlocksFactory` does. Its absence identifies Omeka S 3, where
-  the `item_media_embed` site setting decides instead.
+  `Omeka\Site\ThemeManager::getCurrentTheme()` plus
+  `Omeka\ResourcePageBlockLayoutManager::getResourcePageBlocks($theme)`, exactly
+  as core's `ResourcePageBlocksFactory` does. `mediaEmbeds` is a removable
+  default, so its presence in the resolved blocks is the only reliable answer.
 - `uninstall()` and `upgrade()` both call `removeEditorInstallerSettings()`.
   Deleting a key that was never set must not fail.
 - Adding a new setting means deciding what `uninstall()` does with it. Leaving

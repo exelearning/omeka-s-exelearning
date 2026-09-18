@@ -49,21 +49,25 @@ same viewer, which themes could not position and which ran the ZIP extraction
 inline during a GET request.
 
 The obvious repair — register under `media_renderers` and delete the listener —
-turns out to depend on the core version, and `config/module.ini:9` declares
-`omeka_version_constraint = "^3.0.0 || ^4.0.0"`.
+turns out not to be enough on its own. Whether core calls `$media->render()` on
+an item page is a per-site, per-theme configuration question, and at the time
+this change began `config/module.ini:9` declared
+`omeka_version_constraint = "^3.0.0 || ^4.0.0"`, so it was a per-core-version
+question too.
 
 ## Problem
 
 Where should the viewer be produced, so that every Omeka surface that renders a
-media shows it, it is shown exactly once, and it still appears on the Omeka S
-versions this module declares support for?
+media shows it, it is shown exactly once, and it still appears on sites whose
+item page does not embed media?
 
 ## Decision drivers
 
 - Correctness on every surface: media show pages, site page blocks, item
   showcases, search results and any theme calling `$media->render()`.
 - No double rendering on any supported core version.
-- Backward compatibility: the module claims Omeka S 3 *and* 4.
+- Support only what is worth supporting: Omeka S 3 is old, and carrying it costs
+  a second code path in every decision this ADR touches.
 - One implementation of the viewer, not two that drift.
 - No state mutation during a GET render.
 - Themes must be able to position and style the viewer.
@@ -77,14 +81,15 @@ Correct on Omeka S 4, where `Site\ResourcePageBlockLayout\Manager::RESOURCE_PAGE
 includes `mediaEmbeds` for items (`v4.2.0`,
 `application/src/Site/ResourcePageBlockLayout/Manager.php:18-28`).
 
-On Omeka S 3 it is a silent public-facing regression. `v3.2.3`'s
-`application/view/omeka/site/item/show.phtml` gates media rendering on
-`$this->siteSetting('item_media_embed', false)`, which defaults to off, so
-`$media->render()` is never called on an item page and the viewer simply
-disappears from every S3 site that never ticked that box.
+It regresses on both cores in the original support range, for different reasons.
 
-It is also incomplete on Omeka S 4, where `mediaEmbeds` is only a *default*
-and can be removed per site or per theme — see option 4.
+On Omeka S 3, `v3.2.3`'s `application/view/omeka/site/item/show.phtml` gates
+media rendering on `$this->siteSetting('item_media_embed', false)`, which
+defaults to off, so `$media->render()` is never called on an item page and the
+viewer disappears from every S3 site that never ticked that box.
+
+On Omeka S 4 it is incomplete: `mediaEmbeds` is only a *default* and can be
+removed per site or per theme — see option 4.
 
 ### Option 2: Drop `setRenderer()` and route by MIME through `file_renderers`
 
@@ -94,30 +99,29 @@ Fewer lines. Routes by media type, which forces the module to keep claiming
 themes can key on. `ThreeDViewer` does this, and collides with this module over
 `application/octet-stream` for exactly that reason.
 
-### Option 3: Register under `media_renderers`, narrow `module.ini` to `^4.0.0`
+### Option 3: Narrow `module.ini` to `^4.0.0` and delete the listener
 
-Makes option 1 honest by dropping the version it breaks. It is a support
-decision rather than a technical one, and it is not forced: option 4 keeps both
-versions working at the cost of about fifteen lines.
+Drops the core whose default breaks option 1. Omeka S 3 is old and supporting it
+costs a second branch in every decision here, so narrowing is worth doing on its
+own merits.
 
-### Option 4: Register under `media_renderers`, keep the listener as a version shim
+It is not sufficient by itself, though: it fixes the S3 default and leaves the
+S4 configuration case (option 4) untouched. A site or theme that removes
+`mediaEmbeds` still loses the viewer.
 
-Register the renderer where the column is resolved, delete the duplicate
-partial, and keep the `view.show.after` listener reduced to one job: call
-`$media->render()` when — and only when — the item page did not embed the media
-itself.
+### Option 4: Option 3, plus a listener kept for the one case configuration can remove
 
-The question the shim has to answer is not "which Omeka is this", it is "does
-this page already render its media". The two cores answer it from different
-places:
+Narrow to `^4.0.0`, register the renderer where the column is resolved, delete
+the duplicate partial, and keep the `view.show.after` listener reduced to a
+single job: call `$media->render()` when — and only when — the item page did not
+embed the media itself.
 
-| Core | What decides | How the shim reads it |
-| --- | --- | --- |
-| S 3 | the `item_media_embed` site setting, default off | `$view->siteSetting('item_media_embed', false)` |
-| S 4 | whether `mediaEmbeds` survives in the site's **resolved** resource-page block configuration | `Omeka\ResourcePageBlockLayoutManager::getResourcePageBlocks($currentTheme)` |
+The question the listener answers is not "which Omeka is this", it is "does this
+page already render its media", and on Omeka S 4 that is configuration, not
+version.
 
 **Helper or service existence is not sufficient**, and an earlier draft of this
-change got that wrong. In S 4 the `resourcePageBlocks` helper always exists and
+change got that wrong. The `resourcePageBlocks` helper always exists and
 `mediaEmbeds` is always registered; what varies is whether this *site's*
 configuration still lists the block.
 `Manager::getResourcePageBlocks()` prefers the administrator's saved blocks,
@@ -126,9 +130,9 @@ then the theme's `resource_page_blocks` INI section, and only then
 `mediaEmbeds`, and then core renders no media and the viewer vanishes — the very
 regression option 1 causes on S 3, reappearing on S 4 through configuration.
 
-Reading the resolved configuration answers it exactly. The presence of
-`Omeka\ResourcePageBlockLayoutManager` in the container distinguishes the two
-cores without comparing version strings, since S 3 has no such service.
+Reading the resolved configuration answers it exactly, and with S 3 out of the
+support range it is the *only* branch the listener needs: one method, no version
+probe, and it does not even need the view.
 
 ## Evidence
 
@@ -161,8 +165,10 @@ cores without comparing version strings, since S 3 has no such service.
   The shim reads it the same way, so it sees what core renders from, without
   rendering anything or inspecting generated markup.
 - `Omeka\ResourcePageBlockLayoutManager` is registered in `v4.2.0`
-  `application/config/module.config.php:273` and absent from `v3.2.3`'s, which
-  makes its presence a capability probe rather than a version check.
+  `application/config/module.config.php:273` and absent from `v3.2.3`'s.
+- Omeka S 4.0 and 4.1 declare `"php": ">=7.4"` and only 4.2 raises it to
+  `">=8.1"` (their `composer.json`), so narrowing to `^4.0.0` does **not** let
+  this module raise its own PHP floor; `composer.json:24` stays `>=7.4`.
 - `v4.2.0` `application/view/omeka/admin/media/show.phtml` calls
   `$media->render()` at line 23 and triggers `view.show.after` at line 122 — so
   the admin partial's own iframe would have produced a second viewer once the
@@ -174,6 +180,12 @@ cores without comparing version strings, since S 3 has no such service.
 
 We will adopt option 4.
 
+**`config/module.ini` narrows to `omeka_version_constraint = "^4.0.0"`.** Omeka
+S 3 is old, its item pages do not embed media by default, and supporting it
+meant a second branch in the listener below. Dropping it is what makes the rest
+of this decision one code path instead of two. The module's PHP floor is
+unaffected: Omeka S 4.0 and 4.1 still allow PHP 7.4.
+
 `ExeLearningRenderer` implements both renderer interfaces and is registered
 under `media_renderers`, so `$media->render()` produces the viewer on every
 Omeka surface. `file_renderers` keeps the factory and a single `elpx` alias for
@@ -183,12 +195,11 @@ media stored before this module claimed them, whose `renderer` column is still
 `view/exelearning/public/item-show.phtml` is deleted and the admin partial is
 reduced to the editor modal, leaving one implementation of the viewer.
 
-The `Omeka\Controller\Site\Item` / `view.show.after` listener is kept, reduced to
-a compatibility shim that calls `$media->render()` when the item page did not
-embed the media itself — on S 3 when `item_media_embed` is off, and on S 4 when
+The `Omeka\Controller\Site\Item` / `view.show.after` listener is kept for the one
+case configuration can still produce: it calls `$media->render()` when
 `mediaEmbeds` is absent from the site's resolved resource-page block
-configuration. It renders the same renderer, not a second implementation, and it
-performs no write.
+configuration, and stays silent otherwise. It renders the same renderer, not a
+second implementation, and it performs no write.
 
 ## Consequences
 
@@ -197,6 +208,9 @@ performs no write.
 - `$media->render()` works on media show pages, page blocks, item showcases,
   search results and any theme that calls it — none of which the listener ever
   covered.
+- One supported core means one detection path. `itemPageEmbedsMedia()` reads the
+  resolved configuration and nothing else: no version probe, no site-setting
+  fallback, and it does not need the view.
 - Themes can position and style the viewer, because it arrives through the
   normal media-rendering path rather than appended after the template.
 - One viewer implementation. The divergent sandbox attribute, the 43-line inline
@@ -207,9 +221,12 @@ performs no write.
 
 ### Negative
 
+- **Omeka S 3 installations can no longer install this version.** Deliberate.
+  They stay on the last release that supported them.
 - The `view.show.after` listener remains, which the upstream issue asked to
-  remove outright. It is now two small methods with a single documented purpose
-  rather than a parallel viewer.
+  remove outright. It is now one small method with a single documented purpose
+  rather than a parallel viewer, and it exists solely for S 4 sites that removed
+  `mediaEmbeds`.
 - The shim reads Omeka's configuration, so it is correct for themes that render
   through the normal resource-page block mechanism. A theme that overrides
   `site/item/show.phtml` and bypasses `resourcePageBlocks()` entirely is outside
@@ -245,22 +262,20 @@ upstream issue asks for. `ModuleTest` asserts the `media_renderers`
 registration, that the renderer satisfies the interface `Manager` enforces, and
 that the `file_renderers` aliases are exactly `['elpx' => …]`.
 
-The shim is covered against a modelled resource-page configuration rather than
-against a version flag: S 3 with `item_media_embed` off (renders) and on
-(silent); S 4 with the resolved configuration containing `mediaEmbeds` (silent),
-with it removed (renders), and with it declared in a non-`main` region
+The listener is covered against a modelled resource-page configuration rather
+than a version flag: the resolved configuration containing `mediaEmbeds`
+(silent), with it removed (renders), and with it declared in a non-`main` region
 (silent); that the resolved blocks are read for the site's current theme; that
-only eXeLearning media render; and that no extraction or write happens during
-the render.
+only eXeLearning media render; that an unreadable configuration keeps it silent;
+and that no extraction or write happens during the render.
 
-Review after the first release that reaches an Omeka S 3 site: if no one is
-still on S3, the shim and the `^3.0.0` constraint can both go, which is option 3
-arrived at by evidence rather than assumption.
+Review if Omeka ever makes `mediaEmbeds` non-removable, or drops resource page
+blocks: the listener would then have no remaining case and could go.
 
 ## Follow-up work
 
-- Decide whether Omeka S 3 is still supported. If not, narrow
-  `config/module.ini:9` to `^4.0.0` and delete the shim.
+- Announce the dropped Omeka S 3 support in the release notes, and state which
+  module release is the last one S 3 sites can use.
 - Consider a bulk reprocess job for media that were never extracted, now that
   public rendering no longer repairs them.
 

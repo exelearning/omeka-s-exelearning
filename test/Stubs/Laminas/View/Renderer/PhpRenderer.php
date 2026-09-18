@@ -29,9 +29,6 @@ class PhpRenderer
     /** @var string */
     public string $basePath = '';
 
-    /** @var array<string, mixed> Values returned by siteSetting(). */
-    public array $siteSettings = [];
-
     /** @var mixed Returned by identity(). */
     public $identity = null;
 
@@ -145,15 +142,6 @@ class PhpRenderer
                 throw new \Exception('No helper found: ' . $name);
             }
         };
-    }
-
-    /**
-     * @param mixed $default
-     * @return mixed
-     */
-    public function siteSetting(string $key, $default = null)
-    {
-        return $this->siteSettings[$key] ?? $default;
     }
 
     /**

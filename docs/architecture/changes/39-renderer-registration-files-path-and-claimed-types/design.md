@@ -123,23 +123,26 @@ The `view.show.after` listener survives as a compatibility shim — see
 [ADR-39-01](../../adr/ADR-39-01-render-media-through-the-media-renderer-manager.md)
 and the next section.
 
+### Supported Omeka narrowed to `^4.0.0`
+
+`config/module.ini` drops `^3.0.0`. Omeka S 3 does not embed media on item pages
+unless an administrator enables `item_media_embed`, so every S 3 site needed the
+compatibility listener, and supporting it meant a second branch in the detection
+below. Narrowing removes that branch.
+
+The PHP floor is unaffected and `composer.json:24` stays `>=7.4`: Omeka S 4.0 and
+4.1 declare `"php": ">=7.4"`, and only 4.2 raises it to `">=8.1"`.
+
 ### Does this page already render its media?
 
-`Module::itemPageEmbedsMedia()` answers the only question the shim needs, and
-takes the answer from Omeka rather than from a version string.
+`Module::itemPageEmbedsMedia()` answers that, and takes the answer from Omeka's
+resolved configuration. It mirrors what
+`Omeka\Service\ViewHelper\ResourcePageBlocksFactory` does to build the helper —
+`ThemeManager::getCurrentTheme()`, then `Manager::getResourcePageBlocks($theme)`
+— and looks for `mediaEmbeds` in any region of `items`.
 
-`Omeka\ResourcePageBlockLayoutManager` exists in Omeka S 4 and not in S 3
-(`v4.2.0` `application/config/module.config.php:273`; absent in `v3.2.3`), so its
-presence in the container selects the branch:
-
-- **Absent (S 3):** `$view->siteSetting('item_media_embed', false)`. S 3's
-  `site/item/show.phtml` renders media only when that is on.
-- **Present (S 4):** `Module::itemPageHasMediaEmbedsBlock()` resolves the site's
-  actual configuration the same way
-  `Omeka\Service\ViewHelper\ResourcePageBlocksFactory` builds the helper —
-  `ThemeManager::getCurrentTheme()`, then
-  `Manager::getResourcePageBlocks($theme)` — and looks for `mediaEmbeds` in any
-  region of `items`.
+With one supported core it is a single method with no version probe, and it does
+not need the view at all.
 
 Checking that the helper or the service merely *exists* is not enough, and an
 earlier draft of this change made that mistake.
@@ -151,7 +154,7 @@ on an untreated S 3 site.
 
 Blocks are keyed by region and a theme may declare regions beyond `main`, so any
 region counts. Nothing is rendered to find this out and no generated markup is
-inspected. On any failure the shim reports "already embedded" and stays silent,
+inspected. On any failure it reports "already embedded" and stays silent,
 because a missing viewer is a smaller fault than two stacked ones.
 
 ### Iframe sandbox — out of scope, see PR #21
@@ -200,10 +203,16 @@ system, and extraction never returns to a GET request.
 
 | ADR | Decision |
 | --- | --- |
-| [ADR-39-01](../../adr/ADR-39-01-render-media-through-the-media-renderer-manager.md) | Route the viewer through `media_renderers`, keep a configuration-gated `view.show.after` shim for pages core does not embed media on |
+| [ADR-39-01](../../adr/ADR-39-01-render-media-through-the-media-renderer-manager.md) | Narrow to Omeka S 4, route the viewer through `media_renderers`, keep a configuration-gated `view.show.after` listener for pages that removed `mediaEmbeds` |
 | [ADR-39-02](../../adr/ADR-39-02-preserve-current-iframe-behaviour-pending-opaque-origin-viewer.md) | Preserve the current iframe behaviour unchanged; the trust boundary is out of scope and owned by PR #21 |
 
 ## Migration / rollout
+
+### Omeka S 3 installations
+
+`config/module.ini` now declares `^4.0.0`, so Omeka S 3 will not install this
+version. Those sites stay on the last release that supported them; the release
+notes must say which one that is. No data is affected.
 
 ### ELPX packages
 
@@ -290,11 +299,12 @@ extraction no longer runs during a GET. For `.elpx` the admin view repairs them.
 - `ExeLearningRendererTest` asserts `render()` returns non-empty HTML containing
   `exelearning-viewer` — the regression test the upstream issue asks for — plus
   the scoped URL rewriting and the admin-only edit button.
-- `ModuleTest` covers the shim against a modelled resource-page configuration,
-  not a version flag: S 3 with `item_media_embed` off and on, S 4 with
-  `mediaEmbeds` present, removed, and declared in a non-`main` region, that the
-  blocks are resolved for the site's current theme, that only eXeLearning media
-  render, and that no extraction or write happens during the render.
+- `ModuleTest` covers the listener against a modelled resource-page
+  configuration, not a version flag: `mediaEmbeds` present, removed, and
+  declared in a non-`main` region; that the blocks are resolved for the site's
+  current theme; that an unreadable configuration keeps it silent; that only
+  eXeLearning media render; and that no extraction or write happens during the
+  render.
 - `ModuleTest` covers the upgrade: `application/octet-stream` withdrawn,
   unrelated entries and site-wide `zip` preserved, an empty whitelist left
   empty, no ownership claimed over pre-existing values, a later uninstall

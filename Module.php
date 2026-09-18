@@ -28,10 +28,7 @@ class Module extends AbstractModule
     /** Setting holding the whitelist entries this module added at install. */
     const SETTING_WHITELIST_ADDITIONS = 'exelearning_whitelist_additions';
 
-    /**
-     * Omeka S 4's resource-page block manager. Absent in Omeka S 3, which is
-     * how this module tells the two apart without reading a version string.
-     */
+    /** Resolves which blocks a site's resource pages actually render. */
     const SERVICE_RESOURCE_PAGE_BLOCKS = 'Omeka\\ResourcePageBlockLayoutManager';
 
     /** Core's block layout that calls $media->render() on an item page. */
@@ -362,9 +359,8 @@ class Module extends AbstractModule
      * The viewer itself lives in ExeLearningRenderer, reached through
      * $media->render(); this hook only decides whether the page is one where
      * core never calls it. See itemPageEmbedsMedia() for how that is
-     * established -- on Omeka S 3 the `item_media_embed` site setting, which
-     * defaults to off, and on Omeka S 4 whether `mediaEmbeds` survives in the
-     * site's resolved resource-page block configuration. On such a page the
+     * established: whether `mediaEmbeds` survives in the site's resolved
+     * resource-page block configuration. On a page that dropped the block the
      * item would otherwise show no viewer at all; everywhere else this stays
      * silent so the viewer is never rendered twice.
      *
@@ -378,7 +374,7 @@ class Module extends AbstractModule
         $view = $event->getTarget();
         $item = $view->item;
 
-        if (!$item || $this->itemPageEmbedsMedia($view)) {
+        if (!$item || $this->itemPageEmbedsMedia()) {
             return;
         }
 
@@ -392,36 +388,6 @@ class Module extends AbstractModule
     /**
      * Whether this item page already renders its media itself.
      *
-     * Omeka S 4 and Omeka S 3 answer this in completely different ways, and the
-     * two services below are the capability probe: the resource-page block
-     * manager exists only in S4, so its presence identifies the core version
-     * without comparing version strings.
-     *
-     * @param mixed $view
-     * @return bool
-     */
-    protected function itemPageEmbedsMedia($view): bool
-    {
-        try {
-            $services = $this->getServiceLocator();
-
-            if (!$services->has(self::SERVICE_RESOURCE_PAGE_BLOCKS)) {
-                // Omeka S 3 has no resource page blocks; one site setting
-                // decides whether item pages embed media at all.
-                return (bool) $view->siteSetting('item_media_embed', false);
-            }
-
-            return $this->itemPageHasMediaEmbedsBlock($services);
-        } catch (\Throwable $e) {
-            // Without a usable view or container we cannot tell; rendering
-            // nothing is safer than rendering the viewer twice.
-            return true;
-        }
-    }
-
-    /**
-     * Whether the current site's resolved item page includes `mediaEmbeds`.
-     *
      * The block being registered is not the question -- it always is. The
      * question is whether this site's *resolved* configuration still lists it,
      * because `Manager::getResourcePageBlocks()` prefers the site
@@ -429,29 +395,35 @@ class Module extends AbstractModule
      * from its INI file, and only falls back to
      * `RESOURCE_PAGE_BLOCKS_DEFAULT` when neither is set. An administrator or a
      * theme may drop `mediaEmbeds`, and then core never calls
-     * `$media->render()` on the item page.
+     * `$media->render()` on the item page and the viewer would vanish.
      *
      * This mirrors what `Omeka\Service\ViewHelper\ResourcePageBlocksFactory`
      * does to build the helper, so it reads the same configuration core renders
      * from -- without rendering anything or inspecting generated markup.
      *
-     * @param mixed $services
      * @return bool
      */
-    protected function itemPageHasMediaEmbedsBlock($services): bool
+    protected function itemPageEmbedsMedia(): bool
     {
-        $theme = $services->get('Omeka\Site\ThemeManager')->getCurrentTheme();
-        $blocks = $services->get(self::SERVICE_RESOURCE_PAGE_BLOCKS)->getResourcePageBlocks($theme);
+        try {
+            $services = $this->getServiceLocator();
+            $theme = $services->get('Omeka\Site\ThemeManager')->getCurrentTheme();
+            $blocks = $services->get(self::SERVICE_RESOURCE_PAGE_BLOCKS)->getResourcePageBlocks($theme);
 
-        // Blocks are grouped by region, and a theme may declare regions beyond
-        // "main", so any region carrying the block counts.
-        foreach ($blocks['items'] ?? [] as $regionBlocks) {
-            if (is_array($regionBlocks) && in_array(self::MEDIA_EMBEDS_BLOCK, $regionBlocks, true)) {
-                return true;
+            // Blocks are grouped by region, and a theme may declare regions
+            // beyond "main", so any region carrying the block counts.
+            foreach ($blocks['items'] ?? [] as $regionBlocks) {
+                if (is_array($regionBlocks) && in_array(self::MEDIA_EMBEDS_BLOCK, $regionBlocks, true)) {
+                    return true;
+                }
             }
-        }
 
-        return false;
+            return false;
+        } catch (\Throwable $e) {
+            // Without a usable container we cannot tell; rendering nothing is
+            // safer than rendering the viewer twice.
+            return true;
+        }
     }
 
     /**
