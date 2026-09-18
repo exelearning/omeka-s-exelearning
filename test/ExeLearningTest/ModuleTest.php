@@ -187,6 +187,25 @@ class ModuleTest extends TestCase
         $this->assertNull($settings->get('extension_whitelist'));
     }
 
+    public function testUninstallSkipsAWhitelistThatIsNowEmpty(): void
+    {
+        // Omeka's file validator reads an empty whitelist as "allow nothing",
+        // so subtracting from one -- or writing one back -- is never right.
+        $settings = new Settings();
+        $settings->set('exelearning_whitelist_additions', [
+            'media_type_whitelist' => ['application/zip'],
+            'extension_whitelist' => [],
+        ]);
+        $settings->set('media_type_whitelist', []);
+        $services = new TestServiceLocator(['Omeka\Settings' => $settings]);
+        $module = new TestableModule($services);
+
+        $module->uninstall($services);
+
+        $this->assertSame([], $settings->get('media_type_whitelist'));
+        $this->assertNull($settings->get('exelearning_whitelist_additions'));
+    }
+
     public function testUninstallToleratesMissingOrMalformedAdditionRecord(): void
     {
         $settings = new Settings();
@@ -720,6 +739,29 @@ class ModuleTest extends TestCase
         ob_end_clean();
 
         $this->assertSame(0, $elp->processCalls);
+    }
+
+    public function testHandlePublicItemShowStaysSilentWhenItCannotTellWhoRenders(): void
+    {
+        // If the view cannot answer, rendering nothing is safer than rendering
+        // the viewer a second time underneath the one core already produced.
+        $exe = $this->makeMedia('course.elpx', 1);
+        $exe->rendered = '<div class="exelearning-viewer"></div>';
+
+        $view = new class extends PhpRenderer {
+            public function getHelperPluginManager()
+            {
+                throw new \RuntimeException('no helper plugin manager');
+            }
+        };
+        $view->item = new FakeItem([$exe]);
+
+        $module = new TestableModule(new TestServiceLocator([]));
+
+        ob_start();
+        $module->handlePublicItemShow(new Event('view.show.after', $view));
+        $this->assertSame('', (string) ob_get_clean());
+        $this->assertSame(0, $exe->renderCalls);
     }
 
     public function testHandlePublicItemShowIgnoresAnItemlessView(): void

@@ -143,6 +143,19 @@ class FilesPathTest extends TestCase
         $this->assertSame('/srv/omeka/files', FilesPath::resolve($services));
     }
 
+    public function testFallsThroughTheNullBasePathToOmekaPath(): void
+    {
+        // The stock-install shape with no usable store: Omeka ships base_path
+        // as null, so the config branch must decline rather than resolve to it.
+        $services = new TestServiceLocator([
+            'Omeka\File\Store' => $this->remoteStore(),
+            'Config' => ['file_store' => ['local' => ['base_path' => null]]],
+        ]);
+
+        $expected = defined('OMEKA_PATH') ? OMEKA_PATH . '/files' : '/var/www/html/files';
+        $this->assertSame($expected, FilesPath::resolve($services));
+    }
+
     public function testFallsBackToOmekaPathWhenNothingElseResolves(): void
     {
         $services = new TestServiceLocator([]);

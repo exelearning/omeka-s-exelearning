@@ -623,6 +623,29 @@ class ElpFileServiceTest extends TestCase
         );
     }
 
+    public function testBookkeepingFailureNeverMasksTheRealError(): void
+    {
+        // Recording why processing failed must not replace the reason it failed.
+        $brokenEntityManager = new class extends EntityManager {
+            public function find(string $className, $id)
+            {
+                throw new \RuntimeException('entity manager closed');
+            }
+        };
+        $service = new ElpFileService(
+            new ApiManager(),
+            $brokenEntityManager,
+            $this->testDir . '/exelearning',
+            $this->filesPath
+        );
+        $media = new MediaRepresentation('http://e/m.elpx', 'T', 'missing.elpx', 7, []);
+
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessageMatches('/Media file not found/');
+
+        $service->processUploadedFile($media);
+    }
+
     public function testASuccessfulProcessClearsAStaleFailureMarker(): void
     {
         $zipPath = $this->filesPath . '/original/good.elpx';

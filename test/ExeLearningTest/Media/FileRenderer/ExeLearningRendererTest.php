@@ -17,6 +17,9 @@ use ReflectionClass;
  */
 class ExeLearningRendererTest extends TestCase
 {
+    /** A well-formed extraction hash, as generateHash() produces. */
+    private const PREVIEW_HASH = 'da39a3ee5e6b4b0d3255bfef95601890afd80709';
+
     private ExeLearningRenderer $renderer;
     private ElpFileService $elpService;
 
@@ -29,6 +32,89 @@ class ExeLearningRendererTest extends TestCase
     private function createMockRequest(): \Laminas\Http\Request
     {
         return new \Laminas\Http\Request();
+    }
+
+    /** An ElpFileService that reports an extracted package with a preview. */
+    private function previewingService(): ElpFileService
+    {
+        $service = $this->createMock(ElpFileService::class);
+        $service->method('getMediaHash')->willReturn(self::PREVIEW_HASH);
+        $service->method('hasPreview')->willReturn(true);
+
+        return $service;
+    }
+
+    private function elpxMedia(int $id = 42): MediaRepresentation
+    {
+        return new MediaRepresentation(
+            'http://example.com/course.elpx',
+            'Course',
+            'course.elpx',
+            $id,
+            ['exelearning_extracted_hash' => self::PREVIEW_HASH, 'exelearning_has_preview' => '1']
+        );
+    }
+
+    /**
+     * Run $test with a valid editor bundle on disk.
+     *
+     * The bundle is a release artifact under the gitignored dist/static/, so it
+     * is present on a developer checkout that ran `make build-editor` and absent
+     * in CI. Branches gated on it would otherwise be covered in one environment
+     * and not the other. Only files this helper created are removed again, so a
+     * real build is never touched.
+     */
+    private function withEditorBundle(callable $test): void
+    {
+        if (\ExeLearning\Service\EditorBundle::isAvailable()) {
+            $test();
+            return;
+        }
+
+        $base = \ExeLearning\Service\EditorBundle::getPath();
+        $created = [];
+        foreach ([$base, $base . '/app'] as $dir) {
+            if (!is_dir($dir)) {
+                mkdir($dir, 0777, true);
+                $created[] = $dir;
+            }
+        }
+        $index = $base . '/index.html';
+        $createdIndex = !file_exists($index);
+        if ($createdIndex) {
+            file_put_contents($index, '<!doctype html><title>editor</title>');
+        }
+
+        try {
+            $test();
+        } finally {
+            if ($createdIndex) {
+                @unlink($index);
+            }
+            foreach (array_reverse($created) as $dir) {
+                @rmdir($dir);
+            }
+        }
+    }
+
+    /**
+     * Run $test with no editor bundle on disk, restoring a real build after.
+     */
+    private function withoutEditorBundle(callable $test): void
+    {
+        $index = \ExeLearning\Service\EditorBundle::getPath() . '/index.html';
+        $saved = is_readable($index) ? file_get_contents($index) : null;
+        if ($saved !== null) {
+            unlink($index);
+        }
+
+        try {
+            $test();
+        } finally {
+            if ($saved !== null) {
+                file_put_contents($index, $saved);
+            }
+        }
     }
 
     /**
@@ -454,66 +540,108 @@ class ExeLearningRendererTest extends TestCase
 
     public function testRenderOmitsTheEditButtonForAUserWhoMayNotUpdate(): void
     {
-        $hash = 'da39a3ee5e6b4b0d3255bfef95601890afd80709';
+        $this->withEditorBundle(function (): void {
+            $renderer = new ExeLearningRenderer(
+                $this->previewingService(),
+                $this->requestOn('/admin/media/42')
+            );
 
-        $elpService = $this->createMock(ElpFileService::class);
-        $elpService->method('getMediaHash')->willReturn($hash);
-        $elpService->method('hasPreview')->willReturn(true);
+            $view = new \Laminas\View\Renderer\PhpRenderer();
+            $view->identity = (object) ['name' => 'viewer'];
+            $view->userIsAllowed = false;
 
-        $renderer = new ExeLearningRenderer($elpService, $this->requestOn('/admin/media/42'));
+            $result = $renderer->render($view, $this->elpxMedia());
 
-        $view = new \Laminas\View\Renderer\PhpRenderer();
-        $view->identity = (object) ['name' => 'viewer'];
-        $view->userIsAllowed = false;
+            $this->assertStringNotContainsString('exelearning-edit-btn', $result);
+        });
+    }
 
-        $media = new MediaRepresentation(
-            'http://example.com/course.elpx',
-            'Course',
-            'course.elpx',
-            42,
-            ['exelearning_extracted_hash' => $hash, 'exelearning_has_preview' => '1']
-        );
+    public function testRenderOmitsTheEditButtonForAnAnonymousVisitor(): void
+    {
+        $this->withEditorBundle(function (): void {
+            $renderer = new ExeLearningRenderer(
+                $this->previewingService(),
+                $this->requestOn('/admin/media/42')
+            );
 
-        $result = $renderer->render($view, $media);
+            $view = new \Laminas\View\Renderer\PhpRenderer();
+            $view->identity = null;
+            $view->userIsAllowed = true;
 
-        $this->assertStringNotContainsString('exelearning-edit-btn', $result);
+            $result = $renderer->render($view, $this->elpxMedia());
+
+            $this->assertStringNotContainsString('exelearning-edit-btn', $result);
+        });
     }
 
     public function testRenderOffersTheEditButtonToAnAdminWhoMayUpdate(): void
     {
         // The admin viewer used to be a second, divergent implementation in
-        // view/exelearning/admin/media-show.phtml. Core's admin media page calls
-        // $media->render() itself, so keeping both showed the viewer twice; the
-        // edit button lives here now and the partial carries only the modal.
-        $hash = 'da39a3ee5e6b4b0d3255bfef95601890afd80709';
+        // view/exelearning/admin/media-show.phtml. Core's admin media template
+        // calls $media->render() itself, so keeping both showed the viewer
+        // twice; the edit button lives here now and the partial carries only
+        // the modal.
+        $this->withEditorBundle(function (): void {
+            $renderer = new ExeLearningRenderer(
+                $this->previewingService(),
+                $this->requestOn('/admin/media/42')
+            );
 
-        $elpService = $this->createMock(ElpFileService::class);
-        $elpService->method('getMediaHash')->willReturn($hash);
-        $elpService->method('hasPreview')->willReturn(true);
+            $view = new \Laminas\View\Renderer\PhpRenderer();
+            $view->identity = (object) ['name' => 'admin'];
+            $view->userIsAllowed = true;
 
-        $renderer = new ExeLearningRenderer($elpService, $this->requestOn('/admin/media/42'));
+            $result = $renderer->render($view, $this->elpxMedia());
 
-        $view = new \Laminas\View\Renderer\PhpRenderer();
-        $view->identity = (object) ['name' => 'admin'];
-        $view->userIsAllowed = true;
+            $this->assertStringContainsString('exelearning-edit-btn', $result);
+            $this->assertStringContainsString('ExeLearningEditor.open(42', $result);
+            $this->assertStringContainsString('Edit in eXeLearning', $result);
+        });
+    }
 
-        $media = new MediaRepresentation(
-            'http://example.com/course.elpx',
-            'Course',
-            'course.elpx',
-            42,
-            ['exelearning_extracted_hash' => $hash, 'exelearning_has_preview' => '1']
-        );
+    public function testRenderOmitsTheEditButtonWhenTheEditorUrlCannotBeBuilt(): void
+    {
+        // The admin editor route is only registered under the admin router, so
+        // url() can throw on a request that reached the renderer some other way.
+        // A missing edit button is the right outcome, not a 500.
+        $this->withEditorBundle(function (): void {
+            $renderer = new ExeLearningRenderer(
+                $this->previewingService(),
+                $this->requestOn('/admin/media/42')
+            );
 
-        $result = $renderer->render($view, $media);
+            $view = new class extends \Laminas\View\Renderer\PhpRenderer {
+                public function url(string $route, array $params = [], array $options = []): string
+                {
+                    throw new \RuntimeException('route not found: ' . $route);
+                }
+            };
+            $view->identity = (object) ['name' => 'admin'];
+            $view->userIsAllowed = true;
 
-        if (!\ExeLearning\Service\EditorBundle::isAvailable()) {
+            $result = $renderer->render($view, $this->elpxMedia());
+
             $this->assertStringNotContainsString('exelearning-edit-btn', $result);
-            return;
-        }
+            $this->assertStringContainsString('exelearning-viewer', $result);
+        });
+    }
 
-        $this->assertStringContainsString('exelearning-edit-btn', $result);
-        $this->assertStringContainsString('ExeLearningEditor.open(42', $result);
+    public function testRenderOmitsTheEditButtonWithoutTheBundledEditor(): void
+    {
+        $this->withoutEditorBundle(function (): void {
+            $renderer = new ExeLearningRenderer(
+                $this->previewingService(),
+                $this->requestOn('/admin/media/42')
+            );
+
+            $view = new \Laminas\View\Renderer\PhpRenderer();
+            $view->identity = (object) ['name' => 'admin'];
+            $view->userIsAllowed = true;
+
+            $result = $renderer->render($view, $this->elpxMedia());
+
+            $this->assertStringNotContainsString('exelearning-edit-btn', $result);
+        });
     }
 
     public function testRenderIncludesSecuritySandbox(): void
