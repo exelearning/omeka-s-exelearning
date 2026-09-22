@@ -4,6 +4,8 @@ name: CI
 on:
   pull_request:
     paths-ignore:
+      - '.agents/skills/**'
+      - '.claude/skills/**'
       - '**.md'
       - 'docs/**'
       - '.github/*.md'
@@ -13,6 +15,8 @@ on:
     branches:
       - '*'
     paths-ignore:
+      - '.agents/skills/**'
+      - '.claude/skills/**'
       - '**.md'
       - 'docs/**'
       - '.github/*.md'
