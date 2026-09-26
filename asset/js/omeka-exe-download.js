@@ -20,18 +20,19 @@
     var disposeTimer = null;
 
     function getBasePath() {
-        var href = window.location.href;
-        var base = '';
-        var markers = ['/admin/', '/s/', '/api/'];
-        for (var i = 0; i < markers.length; i++) {
-            var idx = href.indexOf(markers[i]);
-            if (idx !== -1) {
-                var url = new URL(href);
-                var pathToMarker = url.pathname.substring(0, url.pathname.indexOf(markers[i]));
-                return url.origin + pathToMarker;
+        // Cut at the EARLIEST marker, not the first one in the list: on a site
+        // whose slug is "admin", "/s/admin/" must resolve at "/s/".
+        var path = window.location.pathname;
+        var earliest = -1;
+        ['/admin/', '/s/', '/api/'].forEach(function(marker) {
+            var idx = path.indexOf(marker);
+            if (idx !== -1 && (earliest === -1 || idx < earliest)) {
+                earliest = idx;
             }
-        }
-        return window.location.origin;
+        });
+        return earliest === -1
+            ? window.location.origin
+            : window.location.origin + path.substring(0, earliest);
     }
 
     function exportBootstrapUrl(mediaId) {

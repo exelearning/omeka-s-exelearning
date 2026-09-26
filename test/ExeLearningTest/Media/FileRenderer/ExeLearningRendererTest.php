@@ -454,6 +454,59 @@ class ExeLearningRendererTest extends TestCase
         $this->assertStringNotContainsString('exelearning-fallback', $result);
     }
 
+    /**
+     * Runs the viewer's inline script in Node with a fake window and checks the
+     * base it derives. Skipped where Node is not installed.
+     *
+     * @dataProvider contentBaseProvider
+     */
+    public function testInlineScriptDerivesContentBaseFromTheEarliestMarker(string $href, string $expected): void
+    {
+        $node = trim((string) shell_exec('command -v node 2>/dev/null'));
+        if ($node === '') {
+            $this->markTestSkipped('Node is not installed.');
+        }
+        $hash = 'da39a3ee5e6b4b0d3255bfef95601890afd80709';
+        $elpService = $this->createMock(ElpFileService::class);
+        $elpService->method('getMediaHash')->willReturn($hash);
+        $elpService->method('hasPreview')->willReturn(true);
+        $renderer = new ExeLearningRenderer($elpService, $this->createMockRequest());
+        $media = new MediaRepresentation(
+            'http://example.com/course.elpx',
+            'Course',
+            'course.elpx',
+            42,
+            ['exelearning_extracted_hash' => $hash, 'exelearning_has_preview' => '1']
+        );
+        $html = $renderer->render(new \Laminas\View\Renderer\PhpRenderer(), $media);
+        $this->assertSame(1, preg_match('#<script>(\(function\(\)\{var h=.*?)</script>#s', $html, $m));
+
+        $js = 'var window={location:{href:' . json_encode($href) . '}};'
+            . 'var document={getElementById:function(){return null;}};'
+            . $m[1] . ';process.stdout.write(window.exelearningContentBase);';
+        $file = tempnam(sys_get_temp_dir(), 'exe-base-') . '.js';
+        file_put_contents($file, $js);
+        try {
+            $out = shell_exec(escapeshellarg($node) . ' ' . escapeshellarg($file));
+        } finally {
+            @unlink($file);
+        }
+        $this->assertSame($expected, $out);
+    }
+
+    public function contentBaseProvider(): array
+    {
+        return [
+            'admin page' => ['https://x.test/omeka/admin/media/42', 'https://x.test/omeka'],
+            'public site' => ['https://x.test/omeka/s/demo/item/5', 'https://x.test/omeka'],
+            'site slug admin' => ['https://x.test/omeka/s/admin/item/5', 'https://x.test/omeka'],
+            'playground prefix' => [
+                'https://x.test/playground/abc/php83/s/admin/media/1',
+                'https://x.test/playground/abc/php83',
+            ],
+        ];
+    }
+
     public function testRenderScopesItsUrlRewritingToItsOwnViewer(): void
     {
         // Several eXeLearning media can appear on one page; each viewer's inline
