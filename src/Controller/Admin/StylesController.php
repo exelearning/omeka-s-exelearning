@@ -160,8 +160,9 @@ class StylesController extends AbstractActionController
         // input, so it MUST be handled or every multi-upload reports "no
         // file was selected".
         $entries = [];
-        $isTransposedList = array_is_list($files)
-            && isset($files[0])
+        // array_is_list() is PHP 8.1+; isset($files[0]) is enough to tell
+        // shape (c) from the associative shapes (a) and (b).
+        $isTransposedList = isset($files[0])
             && is_array($files[0])
             && array_key_exists('tmp_name', $files[0]);
         if ($isTransposedList) {
