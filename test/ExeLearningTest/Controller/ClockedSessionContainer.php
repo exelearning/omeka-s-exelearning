@@ -116,7 +116,7 @@ class ClockedSessionContainer extends SessionContainer
         }
     }
 
-    public function &__get($name): mixed
+    public function &__get($name)
     {
         $this->expireIfDue();
         if (!array_key_exists($name, $this->store)) {
@@ -147,7 +147,8 @@ class ClockedSessionContainer extends SessionContainer
         return isset($this->store[$offset]);
     }
 
-    public function offsetGet($offset): mixed
+    #[\ReturnTypeWillChange]
+    public function offsetGet($offset)
     {
         $this->expireIfDue();
         return $this->store[$offset] ?? null;
