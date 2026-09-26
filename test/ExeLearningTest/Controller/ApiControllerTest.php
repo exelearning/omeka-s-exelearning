@@ -1307,10 +1307,10 @@ class ApiControllerTest extends TestCase
         ));
     }
 
-    public function testValidateCsrfReadsQueryToken(): void
+    public function testValidateCsrfIgnoresQueryToken(): void
     {
         $controller = $this->controllerWithCsrfOutcome(true);
-        $this->assertTrue($this->callProtectedMethod(
+        $this->assertFalse($this->callProtectedMethod(
             $controller,
             'validateCsrf',
             [$this->csrfRequest(null, null, 'tok')]
