@@ -28,7 +28,8 @@ class Container implements \ArrayAccess, \Iterator, \Countable
         return isset($this->data[$offset]);
     }
 
-    public function offsetGet($offset): mixed
+    #[\ReturnTypeWillChange]
+    public function offsetGet($offset)
     {
         return $this->data[$offset] ?? null;
     }
@@ -47,13 +48,15 @@ class Container implements \ArrayAccess, \Iterator, \Countable
         unset($this->data[$offset]);
     }
 
-    public function current(): mixed
+    #[\ReturnTypeWillChange]
+    public function current()
     {
         $keys = array_keys($this->data);
         return $this->data[$keys[$this->position]] ?? null;
     }
 
-    public function key(): mixed
+    #[\ReturnTypeWillChange]
+    public function key()
     {
         $keys = array_keys($this->data);
         return $keys[$this->position] ?? null;
@@ -88,7 +91,7 @@ class Container implements \ArrayAccess, \Iterator, \Countable
     /**
      * Return by reference to allow indirect modification of arrays.
      */
-    public function &__get(string $name): mixed
+    public function &__get(string $name)
     {
         if (!isset($this->data[$name])) {
             $this->data[$name] = null;
