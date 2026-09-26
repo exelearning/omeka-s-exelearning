@@ -2,7 +2,7 @@
     "name": "exelearning/omeka-s-exelearning",
     "description": "Upload, view and edit eXeLearning content (.elpx files) in Omeka S",
     "type": "omeka-s-module",
-    "license": "GPL-3.0-or-later",
+    "license": "AGPL-3.0-or-later",
     "authors": [
         {
             "name": "Área de Tecnología Educativa",

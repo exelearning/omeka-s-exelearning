@@ -246,8 +246,14 @@ final class DownloadFormatsTest extends TestCase
     private function makeMedia(int $id = 1, string $filename = 'test.elpx', string $url = 'http://example.com/original/file.elpx'): object
     {
         return new class ($id, $filename, $url) {
-            public function __construct(private int $id_, private string $filename_, private string $url_)
+            private int $id_;
+            private string $filename_;
+            private string $url_;
+            public function __construct(int $id, string $filename, string $url)
             {
+                $this->id_ = $id;
+                $this->filename_ = $filename;
+                $this->url_ = $url;
             }
             public function id(): int
             {

@@ -117,3 +117,28 @@ jobs:
           name: coverage-report
           path: artifacts/coverage/html/
           retention-days: 30
+
+  # composer.json promises PHP >= 7.4 but config.platform only affects
+  # dependency resolution; this job runs the suite on the floor itself
+  # (an array_is_list() call once shipped because only 8.3 was tested).
+  test_php_floor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '7.4'
+          extensions: mbstring, intl, dom, json, xml, zip
+          tools: composer:v2
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Run unit tests
+        run: vendor/bin/phpunit -c test/phpunit.xml
