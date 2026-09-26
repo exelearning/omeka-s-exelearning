@@ -18,9 +18,9 @@ use Laminas\Log\LoggerInterface;
  * The registry (built-in disable list + uploaded metadata + block-import
  * flag) is persisted in Omeka's settings store under keys documented below.
  *
- * Built-in themes are discovered by reading the bundled editor's
- * dist/static/data/bundle.json; writes never happen inside dist/static/,
- * so reinstalling the embedded editor never destroys admin-managed styles.
+ * Built-in themes are discovered by reading the bundled editor's theme
+ * config.xml files under dist/static/files/perm/themes/base/; writes never
+ * happen inside dist/static/, so reinstalling the embedded editor never destroys admin-managed styles.
  */
 class StylesService
 {
@@ -151,54 +151,37 @@ class StylesService
     // ------------------------------------------------------------------
 
     /**
+     * List the built-in themes shipped with the bundled editor.
+     *
+     * Reads each dist/static/files/perm/themes/base/<dir>/config.xml instead
+     * of data/bundle.json: editor builds now ship only the zstd-compressed
+     * bundle.json.zst, which PHP cannot decode without the rarely installed
+     * zstd extension. The directory name is the id the editor uses. Themes
+     * with a missing or invalid config.xml are skipped.
+     *
      * @return array<int, array<string,string>>
      */
     public function listBuiltinThemes(): array
     {
-        $bundlePath = $this->modulePath . '/dist/static/data/bundle.json';
-        if (!is_file($bundlePath) || !is_readable($bundlePath)) {
-            return [];
-        }
-        $json = @file_get_contents($bundlePath);
-        if ($json === false || $json === '') {
-            return [];
-        }
-        $data = json_decode($json, true);
-        return $this->extractThemesFromBundle(is_array($data) ? $data : []);
-    }
-
-    /**
-     * Walk a decoded bundle.json payload and return a normalized list of
-     * theme entries. Accepts both the double-nested shape the core build
-     * emits and a flat-array shape.
-     *
-     * @param array $data Decoded bundle.
-     * @return array<int, array<string,string>>
-     */
-    public function extractThemesFromBundle(array $data): array
-    {
-        if (empty($data['themes'])) {
-            return [];
-        }
-        $themes = $data['themes'];
-        if (is_array($themes) && isset($themes['themes']) && is_array($themes['themes'])) {
-            $themes = $themes['themes'];
-        }
-        if (!is_array($themes)) {
-            return [];
-        }
         $out = [];
-        foreach ($themes as $theme) {
-            if (!is_array($theme) || empty($theme['name'])) {
+        foreach (glob($this->modulePath . '/dist/static/files/perm/themes/base/*/config.xml') ?: [] as $configPath) {
+            $source = @file_get_contents($configPath);
+            if ($source === false) {
                 continue;
             }
+            try {
+                $meta = self::parseConfigXml($source);
+            } catch (\RuntimeException $e) {
+                continue;
+            }
+            $id = basename(dirname($configPath));
             $out[] = [
-                'id' => (string) $theme['name'],
-                'name' => (string) $theme['name'],
-                'title' => (string) ($theme['title'] ?? $theme['name']),
-                'version' => (string) ($theme['version'] ?? ''),
-                'description' => (string) ($theme['description'] ?? ''),
-                'author' => (string) ($theme['author'] ?? ''),
+                'id' => $id,
+                'name' => $id,
+                'title' => $meta['title'],
+                'version' => $meta['version'],
+                'description' => $meta['description'],
+                'author' => $meta['author'],
             ];
         }
         return $out;
