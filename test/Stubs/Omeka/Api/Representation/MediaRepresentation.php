@@ -22,6 +22,9 @@ class MediaRepresentation
     /** @var int How many times render() was called. */
     public int $renderCalls = 0;
 
+    /** @var bool Returned by userIsAllowed(), standing in for the per-entity ACL. */
+    public bool $userIsAllowed = true;
+
     public function __construct(
         string $originalUrl,
         string $displayTitle,
@@ -66,6 +69,11 @@ class MediaRepresentation
     public function item(): ?object
     {
         return $this->item;
+    }
+
+    public function userIsAllowed(string $privilege): bool
+    {
+        return $this->userIsAllowed;
     }
 
     /**

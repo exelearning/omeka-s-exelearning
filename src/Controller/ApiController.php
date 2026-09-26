@@ -140,9 +140,8 @@ class ApiController extends AbstractActionController
             return $this->errorResponse(404, 'Media not found');
         }
 
-        // Check permissions
-        $acl = $this->getEvent()->getApplication()->getServiceManager()->get('Omeka\Acl');
-        if (!$acl->userIsAllowed('Omeka\Entity\Media', 'update')) {
+        // Per-media check: authors may only edit media they own.
+        if (!$media->userIsAllowed('update')) {
             return $this->errorResponse(403, 'Forbidden');
         }
 
@@ -286,8 +285,8 @@ class ApiController extends AbstractActionController
             return $this->errorResponse(404, 'Media not found');
         }
 
-        $acl = $this->getEvent()->getApplication()->getServiceManager()->get('Omeka\Acl');
-        if (!$acl->userIsAllowed('Omeka\Entity\Media', 'update')) {
+        // Per-media check: authors may only edit media they own.
+        if (!$media->userIsAllowed('update')) {
             return $this->errorResponse(403, 'Forbidden');
         }
 

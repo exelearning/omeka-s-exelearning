@@ -60,8 +60,8 @@ class EditorController extends AbstractActionController
             return $this->redirect()->toRoute('admin');
         }
 
-        $acl = $this->getEvent()->getApplication()->getServiceManager()->get('Omeka\Acl');
-        if (!$acl->userIsAllowed('Omeka\Entity\Media', 'update')) {
+        // Per-media check: authors may only edit media they own.
+        if (!$media->userIsAllowed('update')) {
             $this->messenger()->addError($this->translate('You do not have permission to edit media.')); // @translate
             return $this->redirect()->toRoute('admin');
         }
