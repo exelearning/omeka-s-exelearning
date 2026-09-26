@@ -41,7 +41,11 @@ jobs:
   build_and_upload:
     runs-on: ubuntu-latest
     steps:
+      # No token on disk while `make build-editor` runs upstream install/build
+      # scripts; the release step receives the token explicitly.
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
