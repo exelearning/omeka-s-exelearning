@@ -6,16 +6,22 @@ on:
     - cron: "0 8 * * *" # Daily at 8:00 UTC
   workflow_dispatch:
 
+# Upstream editor code (bun install/build scripts) runs only in `build`, which
+# holds a read-only token. `publish` starts on a fresh runner, never executes
+# upstream code, and is the only job with write access.
 permissions:
-  contents: write
-  actions: write
+  contents: read
 
 jobs:
-  check_and_build:
+  build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      found: ${{ steps.check.outputs.found }}
+      tag: ${{ steps.check.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
     steps:
-      # No token on disk while `make build-editor` runs upstream install/build
-      # scripts; the marker push below authenticates explicitly.
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
@@ -57,6 +63,13 @@ jobs:
             echo "found=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Compute version
+        if: steps.check.outputs.found == 'true'
+        id: version
+        env:
+          TAG: ${{ steps.check.outputs.tag }}
+        run: echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
       - name: Setup Bun
         if: steps.check.outputs.found == 'true'
         uses: oven-sh/setup-bun@v2
@@ -71,26 +84,39 @@ jobs:
           APP_VERSION: ${{ steps.check.outputs.tag }}
         run: make build-editor
 
-      - name: Compute version
-        if: steps.check.outputs.found == 'true'
-        id: version
-        env:
-          TAG: ${{ steps.check.outputs.tag }}
-        run: |
-          VERSION="${TAG#v}"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-
       - name: Create package
         if: steps.check.outputs.found == 'true'
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: make package VERSION="$VERSION"
 
-      - name: Update editor version marker
+      - name: Upload package
         if: steps.check.outputs.found == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: module-package
+          path: ExeLearning-${{ steps.version.outputs.version }}.zip
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    if: needs.build.outputs.found == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Download package
+        uses: actions/download-artifact@v7
+        with:
+          name: module-package
+
+      - name: Update editor version marker
         env:
-          TAG: ${{ steps.check.outputs.tag }}
+          TAG: ${{ needs.build.outputs.tag }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "$TAG" > .editor-version
@@ -109,11 +135,10 @@ jobs:
           git push
 
       - name: Build Playground URL for this release
-        if: steps.check.outputs.found == 'true'
         id: playground
         env:
-          TAG: ${{ steps.version.outputs.tag }}
-          VERSION: ${{ steps.version.outputs.version }}
+          TAG: ${{ needs.build.outputs.tag }}
+          VERSION: ${{ needs.build.outputs.version }}
         run: |
           RELEASE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/ExeLearning-${VERSION}.zip"
           BLUEPRINT=$(jq --arg url "$RELEASE_URL" '.modules[0].source.url = $url' blueprint.json)
@@ -121,18 +146,17 @@ jobs:
           echo "url=https://ateeducacion.github.io/omeka-s-playground/?blueprint-data=${ENCODED}" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
-        if: steps.check.outputs.found == 'true'
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          name: "${{ steps.version.outputs.tag }}"
+          tag_name: ${{ needs.build.outputs.tag }}
+          name: "${{ needs.build.outputs.tag }}"
           body: |
-            Automated build with eXeLearning editor ${{ steps.version.outputs.tag }}.
+            Automated build with eXeLearning editor ${{ needs.build.outputs.tag }}.
 
             ---
 
             <a href="${{ steps.playground.outputs.url }}"><img src="https://raw.githubusercontent.com/ateeducacion/omeka-s-playground/main/ogimage.png" alt="Try eXeLearning in your browser" width="220"></a><br>
             <small><a href="${{ steps.playground.outputs.url }}">Try in your browser</a></small>
-          files: ExeLearning-${{ steps.version.outputs.version }}.zip
+          files: ExeLearning-${{ needs.build.outputs.version }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
