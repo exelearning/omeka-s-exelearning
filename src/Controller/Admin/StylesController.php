@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace ExeLearning\Controller\Admin;
 
+use ExeLearning\Controller\CsrfValidationTrait;
 use ExeLearning\Form\StylesUploadForm;
 use ExeLearning\Service\StylesService;
 use Laminas\Mvc\Controller\AbstractActionController;
@@ -17,6 +18,8 @@ use Laminas\View\Model\ViewModel;
  */
 class StylesController extends AbstractActionController
 {
+    use CsrfValidationTrait;
+
     private StylesService $styles;
 
     public function __construct(StylesService $styles)
@@ -70,7 +73,7 @@ class StylesController extends AbstractActionController
      */
     public function toggleUploadedAction()
     {
-        if (!$this->allowed() || !$this->getRequest()->isPost()) {
+        if (!$this->allowedPost()) {
             return $this->redirect()->toRoute('admin/exelearning-styles');
         }
         $slug = (string) $this->params()->fromPost('slug', '');
@@ -86,7 +89,7 @@ class StylesController extends AbstractActionController
      */
     public function toggleBuiltinAction()
     {
-        if (!$this->allowed() || !$this->getRequest()->isPost()) {
+        if (!$this->allowedPost()) {
             return $this->redirect()->toRoute('admin/exelearning-styles');
         }
         $id = (string) $this->params()->fromPost('id', '');
@@ -102,7 +105,7 @@ class StylesController extends AbstractActionController
      */
     public function deleteAction()
     {
-        if (!$this->allowed() || !$this->getRequest()->isPost()) {
+        if (!$this->allowedPost()) {
             return $this->redirect()->toRoute('admin/exelearning-styles');
         }
         $slug = (string) $this->params()->fromPost('slug', '');
@@ -117,12 +120,27 @@ class StylesController extends AbstractActionController
      */
     public function toggleBlockImportAction()
     {
-        if (!$this->allowed() || !$this->getRequest()->isPost()) {
+        if (!$this->allowedPost()) {
             return $this->redirect()->toRoute('admin/exelearning-styles');
         }
         $enabled = (bool) $this->params()->fromPost('enabled', 0);
         $this->styles->setImportBlocked($enabled);
         return $this->redirect()->toRoute('admin/exelearning-styles');
+    }
+
+    /**
+     * Gate for the state-changing actions: allowed user, POST, valid CSRF token.
+     */
+    private function allowedPost(): bool
+    {
+        if (!$this->allowed() || !$this->getRequest()->isPost()) {
+            return false;
+        }
+        if (!$this->validateCsrf($this->getRequest())) {
+            $this->messenger()->addError('Invalid or expired form. Please try again.');
+            return false;
+        }
+        return true;
     }
 
     /**

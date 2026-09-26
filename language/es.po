@@ -223,6 +223,10 @@ msgid "Style \"%s\" installed."
 msgstr "Estilo «%s» instalado."
 
 #: src/Controller/Admin/StylesController.php
+msgid "Invalid or expired form. Please try again."
+msgstr "Formulario no válido o caducado. Inténtalo de nuevo."
+
+#: src/Controller/Admin/StylesController.php
 msgid "Style deleted."
 msgstr "Estilo eliminado."
 
