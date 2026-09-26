@@ -243,6 +243,10 @@ class StylesServiceTest extends TestCase
     {
         $storage = $this->svc->getStorageDir();
         mkdir($storage, 0555, true);
+        if (is_writable($storage)) {
+            chmod($storage, 0755);
+            $this->markTestSkipped('Permissions are not enforced for this user (e.g. root).');
+        }
         $zip = $this->makeZip(['config.xml' => $this->configXml('acme'), 'style.css' => 'a{}']);
         try {
             $this->svc->installFromZip($zip);
