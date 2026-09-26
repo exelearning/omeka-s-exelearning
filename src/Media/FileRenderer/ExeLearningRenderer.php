@@ -169,8 +169,11 @@ class ExeLearningRenderer implements FileRendererInterface, MediaRendererInterfa
         // cannot see it, JS can. Scoped to this viewer so several eXeLearning
         // media on one page do not each rewrite the others' elements.
         $html .= '<script>(function(){';
-        $html .= 'var h=window.location.href,b=h;';
-        $html .= '["/admin/","/s/","/api/"].some(function(m){var i=h.indexOf(m);if(i!==-1){b=h.substring(0,i);return true;}return false;});';
+        // Cut at the EARLIEST marker (same rule as the controllers'
+        // extractBasePath): a site slug such as "admin" puts "/admin/" after "/s/".
+        $html .= 'var h=window.location.href,b=h,e=-1;';
+        $html .= '["/admin/","/s/","/api/"].forEach(function(m){var i=h.indexOf(m);if(i!==-1&&(e===-1||i<e))e=i;});';
+        $html .= 'if(e!==-1)b=h.substring(0,e);';
         $html .= 'window.exelearningContentBase=b;';
         $html .= 'var r=document.getElementById("' . $viewerId . '");';
         $html .= 'if(!r)return;';
