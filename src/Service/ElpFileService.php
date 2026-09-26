@@ -17,6 +17,30 @@ use ZipArchive;
  */
 class ElpFileService
 {
+    /** Apache rules that block direct access to extracted/uploaded content. */
+    public const DENY_ALL_HTACCESS = <<<'HTACCESS'
+# Security: Block direct access to eXeLearning extracted content
+# All content must be served through the secure proxy controller
+# which adds proper security headers (CSP, X-Frame-Options, etc.)
+
+# Deny all direct access
+<IfModule mod_authz_core.c>
+    # Apache 2.4+
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    # Apache 2.2
+    Order deny,allow
+    Deny from all
+</IfModule>
+
+# Alternative: return 403 for all requests
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^ - [F,L]
+</IfModule>
+HTACCESS;
+
     /**
      * Filename of the preview image bundled by eXeLearning at the root of
      * every .elpx package. When present, used as the media thumbnail.
@@ -712,28 +736,7 @@ class ElpFileService
     protected function createSecurityHtaccess(): void
     {
         $htaccessPath = $this->basePath . '/.htaccess';
-        $htaccessContent = <<<'HTACCESS'
-# Security: Block direct access to eXeLearning extracted content
-# All content must be served through the secure proxy controller
-# which adds proper security headers (CSP, X-Frame-Options, etc.)
-
-# Deny all direct access
-<IfModule mod_authz_core.c>
-    # Apache 2.4+
-    Require all denied
-</IfModule>
-<IfModule !mod_authz_core.c>
-    # Apache 2.2
-    Order deny,allow
-    Deny from all
-</IfModule>
-
-# Alternative: return 403 for all requests
-<IfModule mod_rewrite.c>
-    RewriteEngine On
-    RewriteRule ^ - [F,L]
-</IfModule>
-HTACCESS;
+        $htaccessContent = self::DENY_ALL_HTACCESS;
 
         if (@file_put_contents($htaccessPath, $htaccessContent) === false) {
             $this->log('warn', 'Failed to create .htaccess security file');

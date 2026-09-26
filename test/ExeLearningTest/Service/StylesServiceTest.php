@@ -3,7 +3,9 @@ declare(strict_types=1);
 
 namespace ExeLearningTest\Service;
 
+use ExeLearning\Service\ElpFileService;
 use ExeLearning\Service\StylesService;
+use ExeLearning\Service\ZipSafety;
 use Omeka\Settings\Settings;
 use PHPUnit\Framework\TestCase;
 use ZipArchive;
@@ -226,6 +228,34 @@ class StylesServiceTest extends TestCase
      * the offending entry, so an extensionless file must abort the install.
      * This is the guard that silently broke the icons fixture above.
      */
+    public function testInstallWritesDenyAllHtaccessInStorageRoot(): void
+    {
+        $zip = $this->makeZip(['config.xml' => $this->configXml('acme'), 'style.css' => 'a{}']);
+        $this->svc->installFromZip($zip);
+        $this->assertStringEqualsFile(
+            $this->svc->getStorageDir() . '/.htaccess',
+            ElpFileService::DENY_ALL_HTACCESS
+        );
+        @unlink($zip);
+    }
+
+    public function testInstallFromZipRejectsPhpSmuggledBehindAllowedExtension(): void
+    {
+        $zip = $this->makeZip([
+            'config.xml' => $this->configXml('sneaky'),
+            'style.css'  => 'a{}',
+            'shell.php.css' => '<?php',
+        ]);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Rejected unsafe archive entry: shell.php.css');
+        try {
+            $this->svc->installFromZip($zip);
+        } finally {
+            @unlink($zip);
+        }
+    }
+
     public function testInstallFromZipRejectsExtensionlessEntry(): void
     {
         $zip = $this->makeZip([
@@ -338,10 +368,10 @@ class StylesServiceTest extends TestCase
     public function testIsUnsafeZipEntryDetectsEveryBadShape(): void
     {
         foreach (['', '\\a', '/absolute', 'http://x', '../x', 'a/../b'] as $bad) {
-            $this->assertTrue(StylesService::isUnsafeZipEntry($bad), "should reject: $bad");
+            $this->assertTrue(ZipSafety::isUnsafeEntry($bad), "should reject: $bad");
         }
         foreach (['style.css', 'icons/a.png', 'sub/dir/file.css'] as $ok) {
-            $this->assertFalse(StylesService::isUnsafeZipEntry($ok), "should accept: $ok");
+            $this->assertFalse(ZipSafety::isUnsafeEntry($ok), "should accept: $ok");
         }
     }
 

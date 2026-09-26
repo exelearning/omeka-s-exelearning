@@ -36,6 +36,9 @@ class StylesService
     /** @var int Default max upload size (20 MB). */
     public const DEFAULT_MAX_ZIP_SIZE = 20971520;
 
+    /** Zip-bomb cap on the decompressed size of one style package (100 MiB). */
+    public const MAX_EXTRACTED_BYTES = 104857600;
+
     /**
      * File extensions allowed inside a style ZIP.
      *
@@ -336,7 +339,14 @@ class StylesService
         }
 
         try {
-            $this->extractZipSafely($zipPath, $dest, $prefix);
+            ZipSafety::extractFile(
+                $zipPath,
+                $dest,
+                ZipSafety::DEFAULT_MAX_FILES,
+                self::MAX_EXTRACTED_BYTES,
+                $prefix
+            );
+            $this->ensureStorageHtaccess();
         } catch (\Throwable $e) {
             self::recursiveDelete($dest);
             throw $e;
@@ -416,7 +426,7 @@ class StylesService
                 throw new \RuntimeException('The ZIP archive contains unreadable entries.');
             }
             $name = (string) $stat['name'];
-            if (self::isUnsafeZipEntry($name)) {
+            if (ZipSafety::isUnsafeEntry($name) || ZipSafety::isForbiddenEntry($name)) {
                 $zip->close();
                 throw new \RuntimeException('Rejected unsafe archive entry: ' . $name);
             }
@@ -498,89 +508,20 @@ class StylesService
     }
 
     /**
-     * @throws \RuntimeException
+     * Deny direct web access to the storage root on Apache; files are only
+     * served through StylesServeController, which adds safe headers.
      */
-    private function extractZipSafely(string $zipPath, string $dest, string $prefix): void
+    private function ensureStorageHtaccess(): void
     {
-        $zip = new \ZipArchive();
-        if ($zip->open($zipPath, \ZipArchive::CHECKCONS) !== true) {
-            throw new \RuntimeException('Failed to reopen ZIP archive.');
+        $path = $this->getStorageDir() . '/.htaccess';
+        if (!is_file($path)) {
+            @file_put_contents($path, ElpFileService::DENY_ALL_HTACCESS);
         }
-        $destReal = rtrim(str_replace('\\', '/', $dest), '/');
-        for ($i = 0; $i < $zip->numFiles; $i++) {
-            $stat = $zip->statIndex($i);
-            if ($stat === false) {
-                continue;
-            }
-            $name = (string) $stat['name'];
-            if (self::isUnsafeZipEntry($name)) {
-                $zip->close();
-                throw new \RuntimeException('Refused unsafe archive entry during extraction.');
-            }
-            $relative = $name;
-            if ($prefix !== '') {
-                if (strpos($name, $prefix) !== 0) {
-                    continue;
-                }
-                $relative = substr($name, strlen($prefix));
-                if ($relative === '') {
-                    continue;
-                }
-            }
-            $target = $destReal . '/' . ltrim($relative, '/');
-            $target = str_replace('\\', '/', $target);
-            if (strpos($target, $destReal . '/') !== 0 && $target !== $destReal) {
-                $zip->close();
-                throw new \RuntimeException('Refused path traversal during extraction.');
-            }
-            if (substr($name, -1) === '/') {
-                if (!is_dir($target) && !@mkdir($target, 0755, true) && !is_dir($target)) {
-                    $zip->close();
-                    throw new \RuntimeException('Failed to create a directory from the archive.');
-                }
-                continue;
-            }
-            $parent = dirname($target);
-            if (!is_dir($parent) && !@mkdir($parent, 0755, true) && !is_dir($parent)) {
-                $zip->close();
-                throw new \RuntimeException('Failed to create a directory from the archive.');
-            }
-            $contents = $zip->getFromIndex($i);
-            if ($contents === false) {
-                $zip->close();
-                throw new \RuntimeException('Failed to read a file from the archive.');
-            }
-            if (file_put_contents($target, $contents) === false) {
-                $zip->close();
-                throw new \RuntimeException('Failed to write an extracted file.');
-            }
-        }
-        $zip->close();
     }
 
     // ------------------------------------------------------------------
     // Static helpers (also exposed for tests)
     // ------------------------------------------------------------------
-
-    public static function isUnsafeZipEntry(string $name): bool
-    {
-        if ($name === '') {
-            return true;
-        }
-        if (strpos($name, '\\') !== false) {
-            return true;
-        }
-        if (strpos($name, '/') === 0) {
-            return true;
-        }
-        if (preg_match('#^[a-zA-Z]+://#', $name)) {
-            return true;
-        }
-        if (preg_match('#(^|/)\.\.(/|$)#', $name)) {
-            return true;
-        }
-        return false;
-    }
 
     public static function isAllowedFilename(string $name): bool
     {
