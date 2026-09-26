@@ -46,14 +46,14 @@ class StylesController extends AbstractActionController
             if ($form->isValid()) {
                 $summary = $this->processUploads($files['styles_zip'] ?? null);
                 foreach ($summary['installed'] as $title) {
-                    $this->messenger()->addSuccess(sprintf('Style "%s" installed.', $title));
+                    $this->messenger()->addSuccess(sprintf('Style "%s" installed.', $title)); // @translate
                 }
                 foreach ($summary['errors'] as $error) {
                     $this->messenger()->addError($error);
                 }
                 return $this->redirect()->toRoute('admin/exelearning-styles');
             }
-            $this->messenger()->addError('Please select at least one ZIP file.');
+            $this->messenger()->addError('Please select at least one ZIP file.'); // @translate
         }
 
         $view = new ViewModel([
@@ -110,7 +110,7 @@ class StylesController extends AbstractActionController
         }
         $slug = (string) $this->params()->fromPost('slug', '');
         if ($slug !== '' && $this->styles->deleteUploaded($slug)) {
-            $this->messenger()->addSuccess('Style deleted.');
+            $this->messenger()->addSuccess('Style deleted.'); // @translate
         }
         return $this->redirect()->toRoute('admin/exelearning-styles');
     }
@@ -137,7 +137,7 @@ class StylesController extends AbstractActionController
             return false;
         }
         if (!$this->validateCsrf($this->getRequest())) {
-            $this->messenger()->addError('Invalid or expired form. Please try again.');
+            $this->messenger()->addError('Invalid or expired form. Please try again.'); // @translate
             return false;
         }
         return true;

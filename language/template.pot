@@ -162,3 +162,19 @@ msgstr ""
 #: src/Controller/EditorController.php Module.php
 msgid "This installation does not include the embedded editor, so editing eXeLearning content is disabled. Official release packages include it; development checkouts must build it with \"make build-editor\"."
 msgstr ""
+
+#: src/Controller/Admin/StylesController.php
+msgid "Style \"%s\" installed."
+msgstr ""
+
+#: src/Controller/Admin/StylesController.php
+msgid "Please select at least one ZIP file."
+msgstr ""
+
+#: src/Controller/Admin/StylesController.php
+msgid "Style deleted."
+msgstr ""
+
+#: src/Controller/Admin/StylesController.php
+msgid "Invalid or expired form. Please try again."
+msgstr ""

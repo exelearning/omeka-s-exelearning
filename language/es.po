@@ -227,6 +227,10 @@ msgid "Invalid or expired form. Please try again."
 msgstr "Formulario no válido o caducado. Inténtalo de nuevo."
 
 #: src/Controller/Admin/StylesController.php
+msgid "Please select at least one ZIP file."
+msgstr "Selecciona al menos un archivo ZIP."
+
+#: src/Controller/Admin/StylesController.php
 msgid "Style deleted."
 msgstr "Estilo eliminado."
 
