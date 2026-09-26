@@ -316,18 +316,6 @@ HTACCESS;
         return $result;
     }
 
-    /**
-     * Clean up extracted content when media is deleted.
-     *
-     * @param MediaRepresentation $media
-     */
-    public function cleanupMedia(MediaRepresentation $media): void
-    {
-        $hash = $this->getMediaHash($media);
-        if ($hash) {
-            $this->cleanupMediaByHash($hash);
-        }
-    }
 
     /**
      * Remove the extraction directory for a hash.
@@ -500,22 +488,6 @@ HTACCESS;
         ]);
     }
 
-    /**
-     * Get the preview URL for a media item.
-     *
-     * @param MediaRepresentation $media
-     * @param string $baseUrl
-     * @return string|null
-     */
-    public function getPreviewUrl(MediaRepresentation $media, string $baseUrl): ?string
-    {
-        $hash = $this->getMediaHash($media);
-        if (!$hash || !$this->hasPreview($media)) {
-            return null;
-        }
-
-        return rtrim($baseUrl, '/') . '/files/exelearning/' . $hash . '/index.html';
-    }
 
     /**
      * Whether the .elpx package bundled a screenshot.png at its root.
@@ -529,42 +501,7 @@ HTACCESS;
         return ($data['exelearning_has_screenshot'] ?? '0') === '1';
     }
 
-    /**
-     * Absolute filesystem path to the bundled screenshot.png, or null if
-     * the media has no screenshot or has not been extracted.
-     *
-     * @param MediaRepresentation $media
-     * @return string|null
-     */
-    public function getScreenshotPath(MediaRepresentation $media): ?string
-    {
-        $hash = $this->getMediaHash($media);
-        if (!$hash || !$this->hasScreenshot($media)) {
-            return null;
-        }
 
-        $path = $this->basePath . '/' . $hash . '/' . self::SCREENSHOT_FILENAME;
-        return file_exists($path) ? $path : null;
-    }
-
-    /**
-     * Public URL to the bundled screenshot.png, served through the secure
-     * content proxy (never directly from /files/exelearning/).
-     *
-     * @param MediaRepresentation $media
-     * @param string $baseUrl Site base URL (with optional path prefix).
-     * @return string|null
-     */
-    public function getScreenshotUrl(MediaRepresentation $media, string $baseUrl): ?string
-    {
-        $hash = $this->getMediaHash($media);
-        if (!$hash || !$this->hasScreenshot($media)) {
-            return null;
-        }
-
-        return rtrim($baseUrl, '/')
-            . '/exelearning/content/' . $hash . '/' . self::SCREENSHOT_FILENAME;
-    }
 
     /**
      * Get the filesystem path to a media file.
