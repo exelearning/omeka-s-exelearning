@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ExeLearning\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-01-12 16:47+0000\n"
+"POT-Creation-Date: 2026-09-26 10:54+0100\n"
 "PO-Revision-Date: 2026-01-12 17:00+0000\n"
 "Last-Translator: Área de Tecnología Educativa <ate@gobiernodecanarias.org>\n"
 "Language-Team: Spanish\n"
@@ -12,285 +12,370 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: test/ExeLearningTest/Controller/EditorControllerTest.php:200
-msgid "Test message"
-msgstr "Mensaje de prueba"
+#: Module.php:465
+msgid "Teacher Mode"
+msgstr "Modo docente"
 
-#: view/exelearning/admin/media-show.phtml:70
-msgid "eXeLearning Preview"
-msgstr "Vista previa de eXeLearning"
+#: Module.php:466
+msgid "Show teacher layer selector"
+msgstr "Mostrar el selector de la capa docente"
 
-#: view/exelearning/admin/media-show.phtml:74
-msgid "Open in new tab"
-msgstr "Abrir en nueva pestaña"
+#: Module.php:467
+msgid ""
+"If disabled, the teacher layer selector is hidden in the embedded "
+"eXeLearning content."
+msgstr ""
+"Si se desactiva, el selector de la capa docente se oculta en el contenido de "
+"eXeLearning incrustado."
 
-#: view/exelearning/admin/media-show.phtml:78
-msgid "Download .elpx"
-msgstr "Descargar .elpx"
-
-#: view/exelearning/admin/media-show.phtml:84
-#: src/Media/FileRenderer/ExeLearningRenderer.php:111
-msgid "Edit in eXeLearning"
-msgstr "Editar en eXeLearning"
-
-#: view/exelearning/admin/media-show.phtml:101
-msgid "Edit eXeLearning File"
-msgstr "Editar archivo eXeLearning"
-
-#: view/exelearning/admin/media-show.phtml:105
-#: src/Controller/EditorController.php:107
-msgid "Save to Omeka"
-msgstr "Guardar en Omeka"
-
-#: view/exelearning/admin/media-show.phtml:108
-msgid "Close"
-msgstr "Cerrar"
-
-#: src/Media/FileRenderer/ExeLearningRenderer.php:105
-msgid "Open fullscreen"
-msgstr "Abrir a pantalla completa"
-
-#: view/exelearning/admin/media-show.phtml:31
-msgid "Fix the cause, then save this media to try again."
-msgstr "Corrija la causa y guarde este medio para volver a intentarlo."
-
-#: view/exelearning/admin/media-show.phtml:28
-msgid "This eXeLearning package could not be processed, so no preview is available."
-msgstr "No se ha podido procesar este paquete eXeLearning, por lo que no hay vista previa disponible."
-
-#: view/exelearning/public/item-show.phtml:64
-#: src/Media/FileRenderer/ExeLearningRenderer.php:92
-msgid "Download"
-msgstr "Descargar"
-
-#: src/Controller/EditorController.php:105
-msgid "Saving..."
-msgstr "Guardando..."
-
-#: src/Controller/EditorController.php:106
-msgid "Saved successfully"
-msgstr "Guardado correctamente"
-
-#: src/Controller/EditorController.php:108
-msgid "Loading project..."
-msgstr "Cargando proyecto..."
-
-#: src/Controller/EditorController.php:109
-msgid "Error"
-msgstr "Error"
-
-#: src/Controller/EditorController.php:110
-#: view/exelearning/admin/media-show.phtml:121
-msgid "Please wait while the file is being saved."
-msgstr "Por favor, espere mientras se guarda el archivo."
-
-#: src/Controller/EditorController.php:111
-#: view/exelearning/admin/media-show.phtml:122
-msgid "You have unsaved changes. Are you sure you want to close?"
-msgstr "Tiene cambios sin guardar. ¿Está seguro de que desea cerrar?"
-
-#: src/Media/FileRenderer/ExeLearningRenderer.php:99
-msgid "Fullscreen"
-msgstr "Pantalla completa"
-
-#: src/Media/FileRenderer/ExeLearningRenderer.php:164
-msgid "Download eXeLearning file"
-msgstr "Descargar archivo eXeLearning"
-
-#: src/Form/ConfigForm.php:23
-msgid "Viewer Height (px)"
-msgstr "Altura del visor (px)"
-
-#: src/Form/ConfigForm.php:24
-msgid "Default height for the eXeLearning content viewer in pixels."
-msgstr "Altura predeterminada del visor de contenido eXeLearning en píxeles."
-
-#: src/Form/ConfigForm.php:38
-msgid "Show Edit Button"
-msgstr "Mostrar botón de edición"
-
-#: src/Form/ConfigForm.php:39
-msgid "Display the \"Edit in eXeLearning\" button for users with edit permissions."
-msgstr "Mostrar el botón \"Editar en eXeLearning\" para usuarios con permisos de edición."
-
-#: Module.php
-msgid "Embedded Editor"
-msgstr "Editor integrado"
-
-#: view/exelearning/admin/styles/index.phtml
-msgid "eXeLearning styles"
-msgstr "Estilos de eXeLearning"
-
-#: view/exelearning/admin/styles/index.phtml
-msgid "Upload eXeLearning style packages and control which styles the embedded editor exposes. Disabled built-ins are hidden from the editor selector; uploaded styles can be enabled, disabled, or deleted at any time."
-msgstr "Sube paquetes de estilos de eXeLearning y controla qué estilos expone el editor integrado. Los estilos integrados deshabilitados quedan ocultos en el selector del editor; los estilos subidos se pueden habilitar, deshabilitar o eliminar en cualquier momento."
-
-#: view/exelearning/admin/styles/index.phtml
-msgid "Import policy"
-msgstr "Política de importación"
-
-#: view/exelearning/admin/styles/index.phtml
-#: src/Controller/Admin/StylesController.php
-msgid "Block user-imported styles"
-msgstr "Bloquear estilos importados por el usuario"
-
-#: view/exelearning/admin/styles/index.phtml
-msgid "When enabled, the embedded editor hides the \"User styles\" tab and silently refuses to install a style bundled inside an imported .elpx project. This mirrors the eXeLearning ONLINE_THEMES_INSTALL=false behavior."
-msgstr "Cuando está activado, el editor integrado oculta la pestaña «Estilos del usuario» y rechaza de forma silenciosa instalar un estilo incluido en un proyecto .elpx importado. Equivale al comportamiento de eXeLearning ONLINE_THEMES_INSTALL=false."
-
-#: view/exelearning/admin/styles/index.phtml
-msgid "Currently blocking — click to allow imports"
-msgstr "Actualmente bloqueando — pulsa para permitir importaciones"
-
-#: view/exelearning/admin/styles/index.phtml
-msgid "Currently allowing — click to block imports"
-msgstr "Actualmente permitiendo — pulsa para bloquear importaciones"
-
-#: view/exelearning/admin/styles/index.phtml
-msgid "Upload a new style"
-msgstr "Subir un estilo nuevo"
-
-#: src/Form/StylesUploadForm.php
-msgid "Style ZIP package(s)"
-msgstr "Paquete(s) ZIP de estilo"
-
-#: src/Form/StylesUploadForm.php
-msgid "Select one or more .zip files containing a valid config.xml."
-msgstr "Selecciona uno o más archivos .zip con un config.xml válido."
-
-#: src/Form/StylesUploadForm.php
-msgid "Upload styles"
-msgstr "Subir estilos"
-
-#: view/exelearning/admin/styles/index.phtml
-msgid "Maximum file size: %s. Only .zip packages containing a valid config.xml are accepted."
-msgstr "Tamaño máximo: %s. Solo se aceptan paquetes .zip con un config.xml válido."
-
-#: view/exelearning/admin/styles/index.phtml
-msgid "Uploaded styles"
-msgstr "Estilos subidos"
-
-#: view/exelearning/admin/styles/index.phtml
-msgid "No uploaded styles yet."
-msgstr "Todavía no hay estilos subidos."
-
-#: view/exelearning/admin/styles/index.phtml
-msgid "Built-in styles"
-msgstr "Estilos integrados"
-
-#: view/exelearning/admin/styles/index.phtml
-msgid "Built-in styles are not available because the embedded editor is not installed."
-msgstr "Los estilos integrados no están disponibles porque el editor integrado no está instalado."
-
-#: view/exelearning/admin/styles/index.phtml
-msgid "Title"
-msgstr "Título"
-
-#: view/exelearning/admin/styles/index.phtml
-msgid "Id"
-msgstr "Id"
-
-#: view/exelearning/admin/styles/index.phtml
-msgid "Version"
-msgstr "Versión"
-
-#: view/exelearning/admin/styles/index.phtml
-msgid "Enabled"
-msgstr "Habilitado"
-
-#: view/exelearning/admin/styles/index.phtml
-msgid "Actions"
-msgstr "Acciones"
-
-#: view/exelearning/admin/styles/index.phtml
-msgid "Enable"
-msgstr "Habilitar"
-
-#: view/exelearning/admin/styles/index.phtml
-msgid "Disable"
-msgstr "Deshabilitar"
-
-#: view/exelearning/admin/styles/index.phtml
-msgid "Delete"
-msgstr "Eliminar"
-
-#: view/exelearning/admin/styles/index.phtml
-msgid "Delete this style? This cannot be undone."
-msgstr "¿Eliminar este estilo? Esta acción no se puede deshacer."
-
-#: src/Controller/Admin/StylesController.php
-msgid "Style \"%s\" installed."
-msgstr "Estilo «%s» instalado."
-
-#: src/Controller/Admin/StylesController.php
-msgid "Invalid or expired form. Please try again."
-msgstr "Formulario no válido o caducado. Inténtalo de nuevo."
-
-#: src/Controller/Admin/StylesController.php
-msgid "Please select at least one ZIP file."
-msgstr "Selecciona al menos un archivo ZIP."
-
-#: src/Controller/Admin/StylesController.php
-msgid "Style deleted."
-msgstr "Estilo eliminado."
-
-#: Module.php
+#: Module.php:835
 msgid "Styles"
 msgstr "Estilos"
 
-#: Module.php
+#: Module.php:837
 msgid "Style management"
 msgstr "Gestión de estilos"
 
-#: Module.php
+#: Module.php:840
 msgid "Open styles page"
 msgstr "Abrir página de estilos"
 
-#: Module.php
-msgid "Upload eXeLearning style packages, enable/disable built-in styles, and control the \"Block user-imported styles\" policy from a dedicated page."
-msgstr "Sube paquetes de estilos de eXeLearning, habilita o deshabilita los estilos integrados y controla la política «Bloquear estilos importados por el usuario» desde una página dedicada."
+#: Module.php:844
+msgid ""
+"Upload eXeLearning style packages, enable/disable built-in styles, and "
+"control the \"Block user-imported styles\" policy from a dedicated page."
+msgstr ""
+"Sube paquetes de estilos de eXeLearning, habilita o deshabilita los estilos "
+"integrados y controla la política «Bloquear estilos importados por el "
+"usuario» desde una página dedicada."
 
+#: Module.php:874
+msgid "Embedded Editor"
+msgstr "Editor integrado"
 
-#: src/Service/DownloadFormats.php
-msgid "Web"
-msgstr "Web"
+#: Module.php:878 src/Controller/EditorController.php:78
+msgid ""
+"This installation does not include the embedded editor, so editing "
+"eXeLearning content is disabled. Official release packages include it; "
+"development checkouts must build it with \"make build-editor\"."
+msgstr ""
+"Esta instalación no incluye el editor integrado, por lo que la edición de "
+"contenido eXeLearning está desactivada. Los paquetes de las versiones "
+"oficiales lo incluyen; las copias de desarrollo deben compilarlo con «make "
+"build-editor»."
 
-#: src/Service/DownloadFormats.php
-msgid "SCORM 1.2"
-msgstr "SCORM 1.2"
+#: view/exelearning/admin/media-show.phtml:28
+msgid ""
+"This eXeLearning package could not be processed, so no preview is available."
+msgstr ""
+"No se ha podido procesar este paquete eXeLearning, por lo que no hay vista "
+"previa disponible."
 
-#: src/Service/DownloadFormats.php
-msgid "IMS Package"
-msgstr "Paquete IMS"
+#: view/exelearning/admin/media-show.phtml:32
+msgid "Fix the cause, then save this media to try again."
+msgstr "Corrija la causa y guarde este medio para volver a intentarlo."
 
-#: src/Service/DownloadFormats.php
-msgid "EPUB3"
-msgstr "EPUB3"
+#: view/exelearning/admin/media-show.phtml:43
+msgid "Edit eXeLearning File"
+msgstr "Editar archivo eXeLearning"
 
-#: src/Service/DownloadFormats.php
+#: view/exelearning/admin/media-show.phtml:47
+#: view/exelearning/admin/media-show.phtml:60
+#: src/Controller/EditorController.php:111
+msgid "Save to Omeka"
+msgstr "Guardar en Omeka"
+
+#: view/exelearning/admin/media-show.phtml:50
+#: view/exelearning/admin/media-show.phtml:63
+#: src/Controller/EditorController.php:120
+msgid "Close"
+msgstr "Cerrar"
+
+#: view/exelearning/admin/media-show.phtml:59
+#: src/Controller/EditorController.php:109
+msgid "Saving..."
+msgstr "Guardando..."
+
+#: view/exelearning/admin/media-show.phtml:61
+#: src/Controller/EditorController.php:118
+msgid "Please wait while the file is being saved."
+msgstr "Por favor, espere mientras se guarda el archivo."
+
+#: view/exelearning/admin/media-show.phtml:62
+#: src/Controller/EditorController.php:119
+msgid "You have unsaved changes. Are you sure you want to close?"
+msgstr "Tiene cambios sin guardar. ¿Está seguro de que desea cerrar?"
+
+#: view/exelearning/admin/styles/index.phtml:22
+#: view/exelearning/admin/styles/index.phtml:34
+msgid "eXeLearning styles"
+msgstr "Estilos de eXeLearning"
+
+#: view/exelearning/admin/styles/index.phtml:36
+msgid ""
+"Upload eXeLearning style packages and control which styles the embedded "
+"editor exposes. Disabled built-ins are hidden from the editor selector; "
+"uploaded styles can be enabled, disabled, or deleted at any time."
+msgstr ""
+"Sube paquetes de estilos de eXeLearning y controla qué estilos expone el "
+"editor integrado. Los estilos integrados deshabilitados quedan ocultos en el "
+"selector del editor; los estilos subidos se pueden habilitar, deshabilitar o "
+"eliminar en cualquier momento."
+
+#: view/exelearning/admin/styles/index.phtml:38
+msgid "Import policy"
+msgstr "Política de importación"
+
+#: view/exelearning/admin/styles/index.phtml:43
+msgid "Block user-imported styles"
+msgstr "Bloquear estilos importados por el usuario"
+
+#: view/exelearning/admin/styles/index.phtml:46
+msgid ""
+"When enabled, the embedded editor hides the \"User styles\" tab and silently "
+"refuses to install a style bundled inside an imported .elpx project. This "
+"mirrors the eXeLearning ONLINE_THEMES_INSTALL=false behavior."
+msgstr ""
+"Cuando está activado, el editor integrado oculta la pestaña «Estilos del "
+"usuario» y rechaza de forma silenciosa instalar un estilo incluido en un "
+"proyecto .elpx importado. Equivale al comportamiento de eXeLearning "
+"ONLINE_THEMES_INSTALL=false."
+
+#: view/exelearning/admin/styles/index.phtml:50
+msgid "Currently blocking — click to allow imports"
+msgstr "Actualmente bloqueando — pulsa para permitir importaciones"
+
+#: view/exelearning/admin/styles/index.phtml:51
+msgid "Currently allowing — click to block imports"
+msgstr "Actualmente permitiendo — pulsa para bloquear importaciones"
+
+#: view/exelearning/admin/styles/index.phtml:55
+msgid "Upload a new style"
+msgstr "Subir un estilo nuevo"
+
+#: view/exelearning/admin/styles/index.phtml:64
+#, php-format
+msgid ""
+"Maximum file size: %s. Only .zip packages containing a valid config.xml are "
+"accepted."
+msgstr ""
+"Tamaño máximo: %s. Solo se aceptan paquetes .zip con un config.xml válido."
+
+#: view/exelearning/admin/styles/index.phtml:69
+msgid "Uploaded styles"
+msgstr "Estilos subidos"
+
+#: view/exelearning/admin/styles/index.phtml:71
+msgid "No uploaded styles yet."
+msgstr "Todavía no hay estilos subidos."
+
+#: view/exelearning/admin/styles/index.phtml:76
+#: view/exelearning/admin/styles/index.phtml:122
+msgid "Title"
+msgstr "Título"
+
+#: view/exelearning/admin/styles/index.phtml:77
+#: view/exelearning/admin/styles/index.phtml:123
+msgid "Id"
+msgstr "Id"
+
+#: view/exelearning/admin/styles/index.phtml:78
+#: view/exelearning/admin/styles/index.phtml:124
+msgid "Version"
+msgstr "Versión"
+
+#: view/exelearning/admin/styles/index.phtml:79
+msgid "Installed"
+msgstr "Instalado"
+
+#: view/exelearning/admin/styles/index.phtml:80
+#: view/exelearning/admin/styles/index.phtml:125
+msgid "Enabled"
+msgstr "Habilitado"
+
+#: view/exelearning/admin/styles/index.phtml:81
+msgid "Actions"
+msgstr "Acciones"
+
+#: view/exelearning/admin/styles/index.phtml:97
+#: view/exelearning/admin/styles/index.phtml:144
+msgid "Enable"
+msgstr "Habilitar"
+
+#: view/exelearning/admin/styles/index.phtml:97
+#: view/exelearning/admin/styles/index.phtml:144
+msgid "Disable"
+msgstr "Deshabilitar"
+
+#: view/exelearning/admin/styles/index.phtml:103
+msgid "Delete this style? This cannot be undone."
+msgstr "¿Eliminar este estilo? Esta acción no se puede deshacer."
+
+#: view/exelearning/admin/styles/index.phtml:106
+msgid "Delete"
+msgstr "Eliminar"
+
+#: view/exelearning/admin/styles/index.phtml:115
+msgid "Built-in styles"
+msgstr "Estilos integrados"
+
+#: view/exelearning/admin/styles/index.phtml:117
+msgid ""
+"Built-in styles are not available because the embedded editor is not "
+"installed."
+msgstr ""
+"Los estilos integrados no están disponibles porque el editor integrado no "
+"está instalado."
+
+#: src/Controller/EditorController.php:59
+msgid "Media not found."
+msgstr "No se ha encontrado el medio."
+
+#: src/Controller/EditorController.php:65
+msgid "You do not have permission to edit media."
+msgstr "No tienes permiso para editar medios."
+
+#: src/Controller/EditorController.php:70
+msgid "This is not an eXeLearning file."
+msgstr "Este archivo no es de eXeLearning."
+
+#: src/Controller/EditorController.php:110
+msgid "Saved successfully"
+msgstr "Guardado correctamente"
+
+#: src/Controller/EditorController.php:112
+#: src/Controller/EditorController.php:256
+msgid "Loading project..."
+msgstr "Cargando proyecto..."
+
+#: src/Controller/EditorController.php:113
+#: src/Controller/EditorController.php:257
+msgid "Waiting for editor..."
+msgstr "Esperando al editor..."
+
+#: src/Controller/EditorController.php:114
+#: src/Controller/EditorController.php:258
+msgid "Downloading file..."
+msgstr "Descargando archivo..."
+
+#: src/Controller/EditorController.php:115
+#: src/Controller/EditorController.php:259
+msgid "Importing content..."
+msgstr "Importando contenido..."
+
+#: src/Controller/EditorController.php:116
+#: src/Controller/EditorController.php:260
+msgid "Error loading project"
+msgstr "Error al cargar el proyecto"
+
+#: src/Controller/EditorController.php:117
+#: src/Controller/EditorController.php:261
+msgid "Error"
+msgstr "Error"
+
+#: src/Service/DownloadFormats.php:201
 msgid "More download formats"
 msgstr "Más formatos de descarga"
 
-#: src/Media/FileRenderer/ExeLearningRenderer.php
+#: src/Service/DownloadFormats.php:246
 msgid "Preparing download…"
 msgstr "Preparando la descarga…"
 
-#: src/Media/FileRenderer/ExeLearningRenderer.php
+#: src/Service/DownloadFormats.php:247
 msgid "Download failed. Please try again."
 msgstr "La descarga ha fallado. Por favor, inténtelo de nuevo."
 
-#: src/Form/ConfigForm.php
+#: src/Service/DownloadFormats.php:274
+msgid ""
+"This format requires the embedded editor, which is not included in this "
+"installation."
+msgstr ""
+"Este formato requiere el editor integrado, que no está incluido en esta "
+"instalación."
+
+#: src/Media/FileRenderer/ExeLearningRenderer.php:119
+msgid "Open fullscreen"
+msgstr "Abrir a pantalla completa"
+
+#: src/Media/FileRenderer/ExeLearningRenderer.php:126
+msgid "Fullscreen"
+msgstr "Pantalla completa"
+
+#: src/Media/FileRenderer/ExeLearningRenderer.php:218
+msgid "Edit in eXeLearning"
+msgstr "Editar en eXeLearning"
+
+#: src/Media/FileRenderer/ExeLearningRenderer.php:246
+msgid "Download eXeLearning file"
+msgstr "Descargar archivo eXeLearning"
+
+#: src/Form/StylesUploadForm.php:27
+msgid "Style ZIP package(s)"
+msgstr "Paquete(s) ZIP de estilo"
+
+#: src/Form/StylesUploadForm.php:28
+msgid "Select one or more .zip files containing a valid config.xml."
+msgstr "Selecciona uno o más archivos .zip con un config.xml válido."
+
+#: src/Form/StylesUploadForm.php:52
+msgid "Upload styles"
+msgstr "Subir estilos"
+
+#: src/Form/ConfigForm.php:24
+msgid "Viewer Height (px)"
+msgstr "Altura del visor (px)"
+
+#: src/Form/ConfigForm.php:25
+msgid "Default height for the eXeLearning content viewer in pixels."
+msgstr "Altura predeterminada del visor de contenido eXeLearning en píxeles."
+
+#: src/Form/ConfigForm.php:49
 msgid "Download formats"
 msgstr "Formatos de descarga"
 
-#: src/Form/ConfigForm.php
-msgid "Formats offered by the download split-button on embedded eXeLearning content. Non-source formats are produced client-side by the editor exporters bundle."
-msgstr "Formatos que ofrece el botón de descarga del contenido eXeLearning embebido. Los formatos distintos del original se generan en el navegador con el paquete de exportadores del editor."
+#: src/Form/ConfigForm.php:50
+msgid ""
+"Formats offered by the download split-button on embedded eXeLearning "
+"content. Non-source formats are produced client-side by the editor exporters "
+"bundle."
+msgstr ""
+"Formatos que ofrece el botón de descarga del contenido eXeLearning embebido. "
+"Los formatos distintos del original se generan en el navegador con el "
+"paquete de exportadores del editor."
 
-#: src/Service/DownloadFormats.php
-msgid "This format requires the embedded editor, which is not included in this installation."
-msgstr "Este formato requiere el editor integrado, que no está incluido en esta instalación."
+#: src/Controller/Admin/StylesController.php:49
+#, php-format
+msgid "Style \"%s\" installed."
+msgstr "Estilo «%s» instalado."
 
-#: src/Controller/EditorController.php Module.php
-msgid "This installation does not include the embedded editor, so editing eXeLearning content is disabled. Official release packages include it; development checkouts must build it with \"make build-editor\"."
-msgstr "Esta instalación no incluye el editor integrado, por lo que la edición de contenido eXeLearning está desactivada. Los paquetes de las versiones oficiales lo incluyen; las copias de desarrollo deben compilarlo con «make build-editor»."
+#: src/Controller/Admin/StylesController.php:56
+msgid "Please select at least one ZIP file."
+msgstr "Selecciona al menos un archivo ZIP."
+
+#: src/Controller/Admin/StylesController.php:113
+msgid "Style deleted."
+msgstr "Estilo eliminado."
+
+#: src/Controller/Admin/StylesController.php:140
+msgid "Invalid or expired form. Please try again."
+msgstr "Formulario no válido o caducado. Inténtalo de nuevo."
+
+#: src/Service/DownloadFormats.php:22
+msgid "Download .elpx"
+msgstr "Descargar .elpx"
+
+#: src/Service/DownloadFormats.php:29
+msgid "Web"
+msgstr "Web"
+
+#: src/Service/DownloadFormats.php:36
+msgid "SCORM 1.2"
+msgstr "SCORM 1.2"
+
+#: src/Service/DownloadFormats.php:43
+msgid "IMS Package"
+msgstr "Paquete IMS"
+
+#: src/Service/DownloadFormats.php:50
+msgid "EPUB3"
+msgstr "EPUB3"

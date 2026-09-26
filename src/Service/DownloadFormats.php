@@ -19,35 +19,35 @@ final class DownloadFormats
         return [
             [
                 'id' => 'elpx',
-                'label' => 'Download .elpx',
+                'label' => 'Download .elpx', // @translate
                 'suffix' => '.elpx',
                 'mime' => 'application/zip',
                 'client' => false,
             ],
             [
                 'id' => 'html5',
-                'label' => 'Web',
+                'label' => 'Web', // @translate
                 'suffix' => '_web.zip',
                 'mime' => 'application/zip',
                 'client' => true,
             ],
             [
                 'id' => 'scorm12',
-                'label' => 'SCORM 1.2',
+                'label' => 'SCORM 1.2', // @translate
                 'suffix' => '_scorm.zip',
                 'mime' => 'application/zip',
                 'client' => true,
             ],
             [
                 'id' => 'ims',
-                'label' => 'IMS Package',
+                'label' => 'IMS Package', // @translate
                 'suffix' => '_ims.zip',
                 'mime' => 'application/zip',
                 'client' => true,
             ],
             [
                 'id' => 'epub3',
-                'label' => 'EPUB3',
+                'label' => 'EPUB3', // @translate
                 'suffix' => '.epub',
                 'mime' => 'application/epub+zip',
                 'client' => true,
