@@ -627,7 +627,67 @@ class ApiControllerTest extends TestCase
         $this->assertInstanceOf(JsonModel::class, $result);
         $this->assertEquals(500, $this->controller->getResponse()->getStatusCode());
         $this->assertStringContainsString('Save failed', $result->getVariables()['message']);
-        $this->assertStringContainsString('Disk full', $result->getVariables()['message']);
+        $this->assertStringNotContainsString('Disk full', $result->getVariables()['message']);
+    }
+
+    /**
+     * @dataProvider replaceFileOutcomes
+     */
+    public function testSaveActionRemovesRawBodyTempFile(bool $replaceThrows): void
+    {
+        $request = new class {
+            public function isPost(): bool { return true; }
+            public function getPost($key = null) { return null; }
+            public function getContent(): string { return 'PK-raw-body'; }
+            public function getHeaders() {
+                return new class {
+                    public function get($name) {
+                        if ($name !== 'Content-Type') {
+                            return null;
+                        }
+                        return new class {
+                            public function getFieldValue(): string { return 'application/octet-stream'; }
+                        };
+                    }
+                };
+            }
+        };
+
+        $media = new \Omeka\Api\Representation\MediaRepresentation(
+            'http://example.com/files/original/test.elpx',
+            'Test ELP',
+            'test.elpx',
+            123
+        );
+
+        $seenPath = null;
+        $this->elpService->method('replaceFile')
+            ->willReturnCallback(function ($media, string $path) use (&$seenPath, $replaceThrows) {
+                $seenPath = $path;
+                $this->assertFileExists($path);
+                if ($replaceThrows) {
+                    throw new \Exception('Invalid eXeLearning file');
+                }
+                return ['hasPreview' => false, 'hash' => null];
+            });
+
+        $this->controller->setRequest($request);
+        $this->controller->setIdentity(new class {
+            public function getId(): int { return 1; }
+        });
+        $this->controller->setRouteParams(['id' => '123']);
+        $this->controller->addMedia(123, $media);
+        $this->controller->setUserAllowed(true);
+
+        $this->controller->saveAction();
+
+        $this->assertNotNull($seenPath);
+        $this->assertFileDoesNotExist($seenPath);
+    }
+
+    public function replaceFileOutcomes(): array
+    {
+        return ['success' => [false], 'failure' => [true]];
     }
 
     // =========================================================================
@@ -975,6 +1035,7 @@ class ApiControllerTest extends TestCase
         $this->assertInstanceOf(JsonModel::class, $result);
         $this->assertEquals(500, $this->controller->getResponse()->getStatusCode());
         $this->assertStringContainsString('Update failed', $result->getVariables()['message']);
+        $this->assertStringNotContainsString('Database error', $result->getVariables()['message']);
     }
 
     public function testSetTeacherModeActionWithFalseString(): void

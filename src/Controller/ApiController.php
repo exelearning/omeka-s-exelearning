@@ -151,6 +151,9 @@ class ApiController extends AbstractActionController
         $contentType = $request->getHeaders()->get('Content-Type');
         $contentTypeValue = $contentType ? $contentType->getFieldValue() : '';
         $tmpFile = null;
+        // Only the raw-body branch creates its own temp file; PHP removes
+        // multipart uploads itself at the end of the request.
+        $ownsTmpFile = false;
 
         if (stripos($contentTypeValue, 'application/octet-stream') !== false
             || stripos($contentTypeValue, 'application/zip') !== false) {
@@ -159,6 +162,10 @@ class ApiController extends AbstractActionController
                 return $this->errorResponse(400, 'Empty request body');
             }
             $tmpFile = tempnam(sys_get_temp_dir(), 'exelearning-save-');
+            if ($tmpFile === false) {
+                return $this->errorResponse(500, 'Failed to write request body to temp file');
+            }
+            $ownsTmpFile = true;
             if (file_put_contents($tmpFile, $body) === false) {
                 @unlink($tmpFile);
                 return $this->errorResponse(500, 'Failed to write request body to temp file');
@@ -194,7 +201,13 @@ class ApiController extends AbstractActionController
                 'contentPath' => $contentPath,
             ]);
         } catch (\Exception $e) {
-            return $this->errorResponse(500, 'Save failed: ' . $e->getMessage());
+            // Service messages can carry server paths; keep them in the log.
+            error_log(sprintf('[ExeLearning] save failed for media %d: %s', (int) $mediaId, $e->getMessage()));
+            return $this->errorResponse(500, 'Save failed. Check the server log for details.');
+        } finally {
+            if ($ownsTmpFile) {
+                @unlink($tmpFile);
+            }
         }
     }
 
@@ -289,7 +302,8 @@ class ApiController extends AbstractActionController
                 'teacherModeVisible' => $visible,
             ]);
         } catch (\Exception $e) {
-            return $this->errorResponse(500, 'Update failed: ' . $e->getMessage());
+            error_log(sprintf('[ExeLearning] teacher-mode update failed for media %d: %s', (int) $mediaId, $e->getMessage()));
+            return $this->errorResponse(500, 'Update failed. Check the server log for details.');
         }
     }
 }
