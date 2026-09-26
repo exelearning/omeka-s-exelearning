@@ -15,8 +15,9 @@ trait CsrfValidationTrait
     /**
      * Validate the CSRF token on a state-changing request.
      *
-     * The token is read from the `csrf` POST field, the `X-CSRF-Token` header,
-     * or the `csrf` query parameter.
+     * The token is read from the `csrf` POST field or the `X-CSRF-Token`
+     * header. The query string is deliberately not accepted: URLs end up in
+     * access logs, Referer headers and browser history.
      *
      * @param object $request
      * @return bool
@@ -27,9 +28,6 @@ trait CsrfValidationTrait
         if (!$token && method_exists($request, 'getHeaders')) {
             $header = $request->getHeaders()->get('X-CSRF-Token');
             $token = ($header && $header !== false) ? $header->getFieldValue() : null;
-        }
-        if (!$token && method_exists($request, 'getQuery')) {
-            $token = $request->getQuery('csrf');
         }
         if ($token === null || $token === '') {
             return false;
