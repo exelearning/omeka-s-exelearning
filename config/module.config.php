@@ -251,10 +251,4 @@ return [
             ],
         ],
     ],
-
-    'exelearning' => [
-        'settings' => [
-            'exelearning_viewer_height' => 600,
-        ],
-    ],
 ];

@@ -925,65 +925,6 @@ class ExeLearningRendererTest extends TestCase
     }
 
     // =========================================================================
-    // buildContentUrl() tests
-    // =========================================================================
-
-    public function testBuildContentUrlIncludesNonStandardPort(): void
-    {
-        $uri = new class extends \Laminas\Uri\Http {
-            public function getPort(): ?int { return 8080; }
-        };
-        $request = new class($uri) extends \Laminas\Http\Request {
-            private $customUri;
-            public function __construct($uri) { $this->customUri = $uri; }
-            public function getUri(): \Laminas\Uri\Http { return $this->customUri; }
-        };
-
-        $renderer = new ExeLearningRenderer($this->elpService, $request);
-
-        $url = $this->callProtectedMethod($renderer, 'buildContentUrl', ['abc123def456789012345678901234567890abcd']);
-
-        $this->assertStringContainsString(':8080', $url);
-        $this->assertStringContainsString('/exelearning/content/abc123def456789012345678901234567890abcd/index.html', $url);
-    }
-
-    public function testBuildContentUrlStripsPlaygroundPrefixFromUriPath(): void
-    {
-        $uri = new class extends \Laminas\Uri\Http {
-            public function getPath(): string { return '/omeka-s-playground/playground/abc123/php83/admin/media/3'; }
-        };
-        $request = new class($uri) extends \Laminas\Http\Request {
-            private $customUri;
-            public function __construct($uri) { $this->customUri = $uri; }
-            public function getUri(): \Laminas\Uri\Http { return $this->customUri; }
-        };
-
-        $renderer = new ExeLearningRenderer($this->elpService, $request);
-        $url = $this->callProtectedMethod($renderer, 'buildContentUrl', ['abc123def456789012345678901234567890abcd']);
-
-        $this->assertStringContainsString('/omeka-s-playground/playground/abc123/php83/exelearning/content/', $url);
-        $this->assertStringNotContainsString('/admin/', $url);
-    }
-
-    public function testExtractBasePathWithAdminRoute(): void
-    {
-        $basePath = $this->callProtectedMethod($this->renderer, 'extractBasePath', ['/playground/uuid/php83/admin/media/3']);
-        $this->assertSame('/playground/uuid/php83', $basePath);
-    }
-
-    public function testExtractBasePathWithPublicRoute(): void
-    {
-        $basePath = $this->callProtectedMethod($this->renderer, 'extractBasePath', ['/playground/uuid/php83/s/mysite/item/1']);
-        $this->assertSame('/playground/uuid/php83', $basePath);
-    }
-
-    public function testExtractBasePathWithNoKnownMarker(): void
-    {
-        $basePath = $this->callProtectedMethod($this->renderer, 'extractBasePath', ['/some/unknown/path']);
-        $this->assertSame('', $basePath);
-    }
-
-    // =========================================================================
     // isTeacherModeVisible() tests
     // =========================================================================
 

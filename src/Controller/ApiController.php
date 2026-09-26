@@ -25,47 +25,7 @@ class ApiController extends AbstractActionController
         $this->elpService = $elpService;
     }
 
-    /**
-     * Build an absolute content proxy URL for the given hash.
-     *
-     * Derives the base path from the actual request URI path so that the
-     * playground prefix (/playground/{uuid}/php83/) is correctly included
-     * even in PHP-WASM environments where getBasePath() is unreliable.
-     */
-    protected function buildContentUrl(string $hash): string
-    {
-        $request = $this->getRequest();
-        $uri = $request->getUri();
-        $scheme = $uri->getScheme();
-        $port = $uri->getPort();
-        $serverUrl = $scheme . '://' . $uri->getHost();
-        if ($port && !(($scheme === 'http' && $port == 80) || ($scheme === 'https' && $port == 443))) {
-            $serverUrl .= ':' . $port;
-        }
-        $basePath = $this->extractBasePath($uri->getPath());
-        return $serverUrl . $basePath . '/exelearning/content/' . $hash . '/index.html';
-    }
 
-    /**
-     * Derive the Omeka base path from the actual request URI path.
-     *
-     * Strips everything from the first known Omeka route segment onward.
-     * Reliable in PHP-WASM where the full URL path is preserved in the URI.
-     */
-    protected function extractBasePath(string $uriPath): string
-    {
-        // Strip from the marker that appears EARLIEST in the path, not the
-        // first one in this list — otherwise a path like
-        // `/sub/s/site/admin/...` would be cut at `/admin/` and keep too much.
-        $earliest = null;
-        foreach (['/admin/', '/s/', '/api/'] as $marker) {
-            $pos = strpos($uriPath, $marker);
-            if ($pos !== false && ($earliest === null || $pos < $earliest)) {
-                $earliest = $pos;
-            }
-        }
-        return $earliest === null ? '' : substr($uriPath, 0, $earliest);
-    }
 
     /**
      * Create a JSON error response with status code.

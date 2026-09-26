@@ -246,78 +246,6 @@ class ElpFileServiceTest extends TestCase
     }
 
     // =========================================================================
-    // getPreviewUrl() tests
-    // =========================================================================
-
-    public function testGetPreviewUrlReturnsUrl(): void
-    {
-        $hash = 'da39a3ee5e6b4b0d3255bfef95601890afd80709';
-        $media = new MediaRepresentation(
-            'http://example.com/file.elpx',
-            'Test File',
-            'file.elpx',
-            1,
-            [
-                'exelearning_extracted_hash' => $hash,
-                'exelearning_has_preview' => '1',
-            ]
-        );
-
-        $baseUrl = 'http://example.com';
-        $expectedUrl = 'http://example.com/files/exelearning/' . $hash . '/index.html';
-
-        $this->assertEquals($expectedUrl, $this->service->getPreviewUrl($media, $baseUrl));
-    }
-
-    public function testGetPreviewUrlReturnsNullWithoutHash(): void
-    {
-        $media = new MediaRepresentation(
-            'http://example.com/file.elpx',
-            'Test File',
-            'file.elpx',
-            1,
-            ['exelearning_has_preview' => '1']
-        );
-
-        $this->assertNull($this->service->getPreviewUrl($media, 'http://example.com'));
-    }
-
-    public function testGetPreviewUrlReturnsNullWithoutPreview(): void
-    {
-        $media = new MediaRepresentation(
-            'http://example.com/file.elpx',
-            'Test File',
-            'file.elpx',
-            1,
-            [
-                'exelearning_extracted_hash' => 'da39a3ee5e6b4b0d3255bfef95601890afd80709',
-                'exelearning_has_preview' => '0',
-            ]
-        );
-
-        $this->assertNull($this->service->getPreviewUrl($media, 'http://example.com'));
-    }
-
-    public function testGetPreviewUrlTrimsTrailingSlash(): void
-    {
-        $hash = 'da39a3ee5e6b4b0d3255bfef95601890afd80709';
-        $media = new MediaRepresentation(
-            'http://example.com/file.elpx',
-            'Test File',
-            'file.elpx',
-            1,
-            [
-                'exelearning_extracted_hash' => $hash,
-                'exelearning_has_preview' => '1',
-            ]
-        );
-
-        $url = $this->service->getPreviewUrl($media, 'http://example.com/');
-        $this->assertStringStartsWith('http://example.com/files', $url);
-        $this->assertStringNotContainsString('//', substr($url, 7)); // after http://
-    }
-
-    // =========================================================================
     // getMediaFilePath() tests
     // =========================================================================
 
@@ -475,37 +403,8 @@ class ElpFileServiceTest extends TestCase
     }
 
     // =========================================================================
-    // cleanupMedia() tests
+    // cleanupMediaByHash() tests
     // =========================================================================
-
-    public function testCleanupMediaRemovesDirectory(): void
-    {
-        $hash = 'da39a3ee5e6b4b0d3255bfef95601890afd80709';
-        $basePath = $this->testDir . '/exelearning';
-        $hashDir = $basePath . '/' . $hash;
-
-        mkdir($hashDir, 0755, true);
-        file_put_contents($hashDir . '/index.html', '<html></html>');
-
-        $service = new ElpFileService(
-            new ApiManager(),
-            new EntityManager(),
-            $basePath,
-            $this->filesPath
-        );
-
-        $media = new MediaRepresentation(
-            'http://example.com/file.elpx',
-            'Test File',
-            'file.elpx',
-            1,
-            ['exelearning_extracted_hash' => $hash]
-        );
-
-        $service->cleanupMedia($media);
-
-        $this->assertDirectoryDoesNotExist($hashDir);
-    }
 
     public function testCleanupMediaByHashIgnoresAnEmptyHash(): void
     {
@@ -673,21 +572,6 @@ class ElpFileServiceTest extends TestCase
         $this->assertSame('1', $entity->data['exelearning_processed']);
     }
 
-    public function testCleanupMediaDoesNothingWithoutHash(): void
-    {
-        $media = new MediaRepresentation(
-            'http://example.com/file.elpx',
-            'Test File',
-            'file.elpx',
-            1,
-            []
-        );
-
-        // Should not throw
-        $this->service->cleanupMedia($media);
-        $this->assertTrue(true);
-    }
-
     // =========================================================================
     // isTeacherModeVisible() tests
     // =========================================================================
@@ -835,46 +719,6 @@ class ElpFileServiceTest extends TestCase
 
         $expected = $this->filesPath . '/original/subdir/abc123.elpx';
         $this->assertEquals($expected, $this->service->getMediaFilePath($media));
-    }
-
-    // =========================================================================
-    // getPreviewUrl edge cases
-    // =========================================================================
-
-    public function testGetPreviewUrlWithBaseUrlWithoutSlash(): void
-    {
-        $hash = 'da39a3ee5e6b4b0d3255bfef95601890afd80709';
-        $media = new MediaRepresentation(
-            'http://example.com/file.elpx',
-            'Test File',
-            'file.elpx',
-            1,
-            [
-                'exelearning_extracted_hash' => $hash,
-                'exelearning_has_preview' => '1',
-            ]
-        );
-
-        $url = $this->service->getPreviewUrl($media, 'http://example.com');
-        $this->assertEquals('http://example.com/files/exelearning/' . $hash . '/index.html', $url);
-    }
-
-    public function testGetPreviewUrlWithMultipleTrailingSlashes(): void
-    {
-        $hash = 'da39a3ee5e6b4b0d3255bfef95601890afd80709';
-        $media = new MediaRepresentation(
-            'http://example.com/file.elpx',
-            'Test File',
-            'file.elpx',
-            1,
-            [
-                'exelearning_extracted_hash' => $hash,
-                'exelearning_has_preview' => '1',
-            ]
-        );
-
-        $url = $this->service->getPreviewUrl($media, 'http://example.com///');
-        $this->assertStringContainsString('/files/exelearning/', $url);
     }
 
     // =========================================================================
@@ -1396,167 +1240,6 @@ class ElpFileServiceTest extends TestCase
         );
 
         $this->assertFalse($this->service->hasScreenshot($media));
-    }
-
-    public function testGetScreenshotPathReturnsNullWithoutHash(): void
-    {
-        $media = new MediaRepresentation(
-            'http://example.com/file.elpx',
-            'Test File',
-            'file.elpx',
-            1,
-            ['exelearning_has_screenshot' => '1']
-        );
-
-        $this->assertNull($this->service->getScreenshotPath($media));
-    }
-
-    public function testGetScreenshotPathReturnsNullWithoutScreenshotFlag(): void
-    {
-        $hash = 'da39a3ee5e6b4b0d3255bfef95601890afd80709';
-        $media = new MediaRepresentation(
-            'http://example.com/file.elpx',
-            'Test File',
-            'file.elpx',
-            1,
-            ['exelearning_extracted_hash' => $hash]
-        );
-
-        $this->assertNull($this->service->getScreenshotPath($media));
-    }
-
-    public function testGetScreenshotPathReturnsNullWhenFileMissing(): void
-    {
-        $hash = 'da39a3ee5e6b4b0d3255bfef95601890afd80709';
-        $media = new MediaRepresentation(
-            'http://example.com/file.elpx',
-            'Test File',
-            'file.elpx',
-            1,
-            [
-                'exelearning_extracted_hash' => $hash,
-                'exelearning_has_screenshot' => '1',
-            ]
-        );
-
-        // No screenshot.png on disk under basePath/{hash}/
-        $this->assertNull($this->service->getScreenshotPath($media));
-    }
-
-    public function testGetScreenshotPathReturnsAbsolutePathWhenPresent(): void
-    {
-        $hash = 'da39a3ee5e6b4b0d3255bfef95601890afd80709';
-        $basePath = $this->testDir . '/exelearning';
-        mkdir($basePath . '/' . $hash, 0755, true);
-        $screenshotPath = $basePath . '/' . $hash . '/screenshot.png';
-        file_put_contents($screenshotPath, 'fake png');
-
-        $service = new ElpFileService(
-            new ApiManager(),
-            new EntityManager(),
-            $basePath,
-            $this->filesPath
-        );
-
-        $media = new MediaRepresentation(
-            'http://example.com/file.elpx',
-            'Test File',
-            'file.elpx',
-            1,
-            [
-                'exelearning_extracted_hash' => $hash,
-                'exelearning_has_screenshot' => '1',
-            ]
-        );
-
-        $this->assertEquals($screenshotPath, $service->getScreenshotPath($media));
-    }
-
-    public function testGetScreenshotUrlReturnsProxiedUrl(): void
-    {
-        $hash = 'da39a3ee5e6b4b0d3255bfef95601890afd80709';
-        $media = new MediaRepresentation(
-            'http://example.com/file.elpx',
-            'Test File',
-            'file.elpx',
-            1,
-            [
-                'exelearning_extracted_hash' => $hash,
-                'exelearning_has_screenshot' => '1',
-            ]
-        );
-
-        $url = $this->service->getScreenshotUrl($media, 'http://example.com');
-        $this->assertEquals(
-            'http://example.com/exelearning/content/' . $hash . '/screenshot.png',
-            $url
-        );
-    }
-
-    public function testGetScreenshotUrlReturnsNullWithoutHash(): void
-    {
-        $media = new MediaRepresentation(
-            'http://example.com/file.elpx',
-            'Test File',
-            'file.elpx',
-            1,
-            ['exelearning_has_screenshot' => '1']
-        );
-
-        $this->assertNull($this->service->getScreenshotUrl($media, 'http://example.com'));
-    }
-
-    public function testGetScreenshotUrlReturnsNullWithoutFlag(): void
-    {
-        $media = new MediaRepresentation(
-            'http://example.com/file.elpx',
-            'Test File',
-            'file.elpx',
-            1,
-            ['exelearning_extracted_hash' => 'da39a3ee5e6b4b0d3255bfef95601890afd80709']
-        );
-
-        $this->assertNull($this->service->getScreenshotUrl($media, 'http://example.com'));
-    }
-
-    public function testGetScreenshotUrlNeverPointsToFilesDirectory(): void
-    {
-        $hash = 'da39a3ee5e6b4b0d3255bfef95601890afd80709';
-        $media = new MediaRepresentation(
-            'http://example.com/file.elpx',
-            'Test File',
-            'file.elpx',
-            1,
-            [
-                'exelearning_extracted_hash' => $hash,
-                'exelearning_has_screenshot' => '1',
-            ]
-        );
-
-        $url = $this->service->getScreenshotUrl($media, 'http://example.com');
-        $this->assertStringNotContainsString('/files/exelearning/', $url);
-        $this->assertStringContainsString('/exelearning/content/', $url);
-    }
-
-    public function testGetScreenshotUrlTrimsTrailingSlash(): void
-    {
-        $hash = 'da39a3ee5e6b4b0d3255bfef95601890afd80709';
-        $media = new MediaRepresentation(
-            'http://example.com/file.elpx',
-            'Test File',
-            'file.elpx',
-            1,
-            [
-                'exelearning_extracted_hash' => $hash,
-                'exelearning_has_screenshot' => '1',
-            ]
-        );
-
-        $url = $this->service->getScreenshotUrl($media, 'http://example.com/');
-        $this->assertEquals(
-            'http://example.com/exelearning/content/' . $hash . '/screenshot.png',
-            $url
-        );
     }
 
     public function testProcessUploadedFileDetectsScreenshot(): void

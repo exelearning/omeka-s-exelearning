@@ -118,27 +118,6 @@ final class DownloadFormats
         return null;
     }
 
-    /**
-     * Read the enabled formats from Omeka settings, falling back to defaults.
-     *
-     * @param mixed $settings  An Omeka\Settings\Settings-like object with a
-     *                         `get($key, $default)` method, or null.
-     * @return string[]
-     */
-    public static function fromSettings($settings): array
-    {
-        if (!$settings || !is_object($settings) || !method_exists($settings, 'get')) {
-            return self::enabledByDefault();
-        }
-        $stored = $settings->get('exelearning_download_formats', null);
-        if (is_string($stored)) {
-            $decoded = json_decode($stored, true);
-            if (is_array($decoded)) {
-                $stored = $decoded;
-            }
-        }
-        return $stored === null ? self::enabledByDefault() : self::sanitize($stored);
-    }
 
     /**
      * Render the multi-format split-button as HTML.
