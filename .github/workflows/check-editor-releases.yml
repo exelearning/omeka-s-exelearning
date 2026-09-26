@@ -6,15 +6,25 @@ on:
     - cron: "0 8 * * *" # Daily at 8:00 UTC
   workflow_dispatch:
 
+# Upstream editor code (bun install/build scripts) runs only in `build`, which
+# holds a read-only token. `publish` starts on a fresh runner, never executes
+# upstream code, and is the only job with write access.
 permissions:
-  contents: write
-  actions: write
+  contents: read
 
 jobs:
-  check_and_build:
+  build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      found: ${{ steps.check.outputs.found }}
+      tag: ${{ steps.check.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Get latest exelearning release
         id: check
@@ -25,11 +35,17 @@ jobs:
           LATEST=$(gh api repos/exelearning/exelearning/releases/latest --jq '.tag_name' 2>/dev/null || echo "")
           if [ -z "$LATEST" ]; then
             echo "No release found"
-            echo "found=false" >> $GITHUB_OUTPUT
+            echo "found=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           echo "Latest editor release: $LATEST"
-          echo "tag=$LATEST" >> $GITHUB_OUTPUT
+          # The tag comes from another repository: accept only a plain version
+          # tag before it reaches make, sed, git or the release body.
+          if ! printf '%s' "$LATEST" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.]+)?$'; then
+            echo "::error::Refusing unexpected editor tag format"
+            exit 1
+          fi
+          echo "tag=$LATEST" >> "$GITHUB_OUTPUT"
 
           # Check if we already built this version
           MARKER_FILE=".editor-version"
@@ -41,11 +57,18 @@ jobs:
 
           if [ "$LATEST" = "$CURRENT" ]; then
             echo "Already up to date"
-            echo "found=false" >> $GITHUB_OUTPUT
+            echo "found=false" >> "$GITHUB_OUTPUT"
           else
             echo "New version available"
-            echo "found=true" >> $GITHUB_OUTPUT
+            echo "found=true" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Compute version
+        if: steps.check.outputs.found == 'true'
+        id: version
+        env:
+          TAG: ${{ steps.check.outputs.tag }}
+        run: echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
       - name: Setup Bun
         if: steps.check.outputs.found == 'true'
@@ -61,23 +84,41 @@ jobs:
           APP_VERSION: ${{ steps.check.outputs.tag }}
         run: make build-editor
 
-      - name: Compute version
-        if: steps.check.outputs.found == 'true'
-        id: version
-        run: |
-          TAG="${{ steps.check.outputs.tag }}"
-          VERSION="${TAG#v}"
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-
       - name: Create package
         if: steps.check.outputs.found == 'true'
-        run: make package VERSION=${{ steps.version.outputs.version }}
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: make package VERSION="$VERSION"
+
+      - name: Upload package
+        if: steps.check.outputs.found == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: module-package
+          path: ExeLearning-${{ steps.version.outputs.version }}.zip
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    if: needs.build.outputs.found == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Download package
+        uses: actions/download-artifact@v7
+        with:
+          name: module-package
 
       - name: Update editor version marker
-        if: steps.check.outputs.found == 'true'
+        env:
+          TAG: ${{ needs.build.outputs.tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="${{ steps.check.outputs.tag }}"
           echo "$TAG" > .editor-version
           # Keep the playground blueprint's editor URL in sync with .editor-version,
           # otherwise the preview stays pinned to the hardcoded version.
@@ -90,30 +131,32 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .editor-version blueprint.json
           git commit -m "Update editor version to $TAG"
+          gh auth setup-git
           git push
 
       - name: Build Playground URL for this release
-        if: steps.check.outputs.found == 'true'
         id: playground
+        env:
+          TAG: ${{ needs.build.outputs.tag }}
+          VERSION: ${{ needs.build.outputs.version }}
         run: |
-          RELEASE_URL="https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.tag }}/ExeLearning-${{ steps.version.outputs.version }}.zip"
+          RELEASE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/ExeLearning-${VERSION}.zip"
           BLUEPRINT=$(jq --arg url "$RELEASE_URL" '.modules[0].source.url = $url' blueprint.json)
           ENCODED=$(echo "$BLUEPRINT" | base64 -w 0 | tr '+/' '-_' | tr -d '=')
-          echo "url=https://ateeducacion.github.io/omeka-s-playground/?blueprint-data=${ENCODED}" >> $GITHUB_OUTPUT
+          echo "url=https://ateeducacion.github.io/omeka-s-playground/?blueprint-data=${ENCODED}" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
-        if: steps.check.outputs.found == 'true'
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          name: "${{ steps.version.outputs.tag }}"
+          tag_name: ${{ needs.build.outputs.tag }}
+          name: "${{ needs.build.outputs.tag }}"
           body: |
-            Automated build with eXeLearning editor ${{ steps.version.outputs.tag }}.
+            Automated build with eXeLearning editor ${{ needs.build.outputs.tag }}.
 
             ---
 
             <a href="${{ steps.playground.outputs.url }}"><img src="https://raw.githubusercontent.com/ateeducacion/omeka-s-playground/main/ogimage.png" alt="Try eXeLearning in your browser" width="220"></a><br>
             <small><a href="${{ steps.playground.outputs.url }}">Try in your browser</a></small>
-          files: ExeLearning-${{ steps.version.outputs.version }}.zip
+          files: ExeLearning-${{ needs.build.outputs.version }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

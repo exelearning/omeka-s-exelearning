@@ -34,19 +34,31 @@ on:
           - branch
           - tag
 
+# Upstream editor code (bun install/build scripts) runs only in `build`, which
+# holds a read-only token. `publish` starts on a fresh runner, never executes
+# upstream code, and is the only job with write access.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  build_and_upload:
+  build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      tag_name: ${{ steps.versions.outputs.TAG_NAME }}
+      release_tag: ${{ steps.versions.outputs.RELEASE_TAG }}
+      editor_ref: ${{ steps.versions.outputs.EXELEARNING_EDITOR_REF }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
 
       - name: Resolve module and editor versions
+        id: versions
         env:
           EVENT_NAME: ${{ github.event_name }}
           INPUT_RELEASE_TAG: ${{ github.event.inputs.release_tag }}
@@ -80,7 +92,7 @@ jobs:
             echo "EXELEARNING_EDITOR_REPO_URL=${EDITOR_REPO_URL}"
             echo "EXELEARNING_EDITOR_REF=${EDITOR_REF}"
             echo "EXELEARNING_EDITOR_REF_TYPE=${EDITOR_REF_TYPE}"
-          } >> "$GITHUB_ENV"
+          } | tee -a "$GITHUB_ENV" >> "$GITHUB_OUTPUT"
 
       - name: Install PHP dependencies
         run: composer install --no-interaction --prefer-dist --no-dev
@@ -96,6 +108,26 @@ jobs:
         with:
           name: ExeLearning-${{ env.RELEASE_TAG }}
           path: ExeLearning-${{ env.RELEASE_TAG }}.zip
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG_NAME: ${{ needs.build.outputs.tag_name }}
+      RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
+      EXELEARNING_EDITOR_REF: ${{ needs.build.outputs.editor_ref }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Download package
+        uses: actions/download-artifact@v7
+        with:
+          name: ExeLearning-${{ needs.build.outputs.release_tag }}
 
       - name: Build Playground URL for this release
         id: playground
