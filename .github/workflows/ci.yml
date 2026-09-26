@@ -57,7 +57,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
-          key: composer-${{ hashFiles('composer.json') }}
+          key: composer-${{ hashFiles('composer.lock') }}
           restore-keys: composer-
 
       - name: Install dependencies

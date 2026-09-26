@@ -32,12 +32,12 @@
             "omeka/composer-addon-installer": true
         }
     },
-    "minimum-stability": "dev",
+    "minimum-stability": "stable",
     "prefer-stable": true,
     "require-dev": {
-        "squizlabs/php_codesniffer": "*",
-        "phpunit/phpunit": "*",
-        "zerocrates/extract-tagged-strings": "dev-master",
+        "squizlabs/php_codesniffer": "^4.0",
+        "phpunit/phpunit": "^9.6",
+        "zerocrates/extract-tagged-strings": "dev-master@dev",
         "laminas/laminas-form": "^3.4"
     },
     "autoload": {
