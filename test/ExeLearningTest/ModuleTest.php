@@ -409,6 +409,25 @@ class ModuleTest extends TestCase
         $this->assertCount(8, $settings->deleted);
     }
 
+    public function testUpgradeBackfillsTheStyleStorageHtaccess(): void
+    {
+        $root = sys_get_temp_dir() . '/exelearning-upgrade-' . uniqid();
+        mkdir($root . '/files/' . \ExeLearning\Service\StylesService::STORAGE_SUBDIR, 0755, true);
+        $styles = new \ExeLearning\Service\StylesService(new Settings(), $root . '/files', $root);
+        $services = new TestServiceLocator([
+            'Omeka\Settings' => new RecordingSettings(),
+            \ExeLearning\Service\StylesService::class => $styles,
+        ]);
+
+        (new TestableModule($services))->upgrade('4.1.0', '4.1.1', $services);
+
+        $this->assertStringEqualsFile(
+            $styles->getStorageDir() . '/.htaccess',
+            \ExeLearning\Service\ElpFileService::DENY_ALL_HTACCESS
+        );
+        \ExeLearning\Service\StylesService::recursiveDelete($root);
+    }
+
     // -------------------------------------------------------------- listeners
 
     public function testAttachListenersRegistersEveryOmekaHook(): void

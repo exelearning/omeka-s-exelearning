@@ -36,13 +36,19 @@ Omeka S module for eXeLearning content management. Upload, view and edit eXeLear
 Add these rules to your nginx configuration:
 
 ```nginx
-# Block direct access to extracted files
+# Block direct access to extracted files and uploaded styles
 location ^~ /files/exelearning/ {
     return 403;
 }
+location ^~ /files/exelearning-styles/ {
+    return 403;
+}
 
-# Route content proxy to PHP
+# Route content proxy and style assets to PHP
 location ^~ /exelearning/content/ {
+    try_files $uri /index.php$is_args$args;
+}
+location ^~ /exelearning/styles/ {
     try_files $uri /index.php$is_args$args;
 }
 ```

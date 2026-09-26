@@ -14,6 +14,7 @@ use Omeka\Stdlib\Message;
 use ExeLearning\Form\ConfigForm;
 use ExeLearning\Service\DownloadFormats;
 use ExeLearning\Service\EditorBundle;
+use ExeLearning\Service\StylesService;
 
 /**
  * Main class for the ExeLearning module.
@@ -183,6 +184,16 @@ class Module extends AbstractModule
     public function upgrade($oldVersion, $newVersion, ServiceLocatorInterface $serviceLocator)
     {
         $this->removeEditorInstallerSettings($serviceLocator);
+
+        // Style storage from earlier versions has no deny-all .htaccess, so
+        // uploaded HTML/SVG stayed directly reachable on Apache until the next
+        // upload. Backfill it for existing installs.
+        if ($serviceLocator->has(StylesService::class)) {
+            $styles = $serviceLocator->get(StylesService::class);
+            if (is_dir($styles->getStorageDir())) {
+                $styles->ensureStorageHtaccess();
+            }
+        }
 
         // Only when crossing the boundary. Running this on every future upgrade
         // would keep re-removing a value an administrator may have deliberately

@@ -130,6 +130,10 @@ class ZipSafetyTest extends TestCase
             'php script' => ['shell.php'],
             'phtml uppercase' => ['assets/shell.PHTML'],
             'phar payload' => ['assets/payload.phar'],
+            'pht script' => ['assets/shell.pht'],
+            'phtm script' => ['assets/shell.phtm'],
+            'phps source' => ['assets/shell.phps'],
+            'phpt test' => ['assets/shell.phpt'],
             'cgi script' => ['assets/run.cgi'],
             // Extension smuggling: PHP family in any position, trailing dot/space.
             'php double ext' => ['shell.php.txt'],
@@ -184,6 +188,24 @@ class ZipSafetyTest extends TestCase
         $this->assertFileExists($dest . '/app/main.js');
         $this->assertSame('<html></html>', file_get_contents($dest . '/index.html'));
         $this->assertSame('console.log(1)', file_get_contents($dest . '/app/main.js'));
+    }
+
+    public function testExtractFileStripsPrefix(): void
+    {
+        $zip = $this->makeZip([
+            'theme/' => '',
+            'theme/style.css' => 'a{}',
+            'theme/img/bg.png' => 'png',
+            'outside.css' => 'b{}',
+        ]);
+        $dest = $this->tmpRoot . '/out';
+
+        ZipSafety::extractFile($zip, $dest, ZipSafety::DEFAULT_MAX_FILES, ZipSafety::DEFAULT_MAX_TOTAL_BYTES, 'theme/');
+
+        $this->assertFileExists($dest . '/style.css');
+        $this->assertFileExists($dest . '/img/bg.png');
+        $this->assertFileDoesNotExist($dest . '/outside.css');
+        $this->assertDirectoryDoesNotExist($dest . '/theme');
     }
 
     public function testExtractFileThrowsOnMissingArchive(): void
