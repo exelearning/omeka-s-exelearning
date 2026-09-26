@@ -832,15 +832,15 @@ JS
         };
         $stylesUrl = $renderer->url('admin/exelearning-styles');
         $html = '<fieldset id="exelearning-styles-link">';
-        $html .= '<legend>' . $renderer->escapeHtml($translate('Styles')) . '</legend>'; // @translate
+        $html .= '<legend>' . $renderer->escapeHtml($translate('Styles')) . '</legend>';
         $html .= '<div class="field"><div class="field-meta">';
-        $html .= '<label>' . $renderer->escapeHtml($translate('Style management')) . '</label>'; // @translate
+        $html .= '<label>' . $renderer->escapeHtml($translate('Style management')) . '</label>';
         $html .= '</div><div class="inputs">';
         $html .= '<a class="button" href="' . $renderer->escapeHtmlAttr($stylesUrl) . '">';
-        $html .= $renderer->escapeHtml($translate('Open styles page'));  // @translate
+        $html .= $renderer->escapeHtml($translate('Open styles page'));
         $html .= '</a>';
         $html .= '<p class="explanation">';
-        $html .= $renderer->escapeHtml($translate( // @translate
+        $html .= $renderer->escapeHtml($translate(
             'Upload eXeLearning style packages, enable/disable built-in styles, '
             . 'and control the "Block user-imported styles" policy from a dedicated page.'
         ));
@@ -871,10 +871,10 @@ JS
         };
 
         $html = '<fieldset id="exelearning-editor-status">';
-        $html .= '<legend>' . $renderer->escapeHtml($translate('Embedded Editor')) . '</legend>'; // @translate
+        $html .= '<legend>' . $renderer->escapeHtml($translate('Embedded Editor')) . '</legend>';
         $html .= '<div class="field"><div class="field-meta"></div><div class="inputs">';
         $html .= '<p><span style="color: #dc3232;">&#10007;</span> ';
-        $html .= $renderer->escapeHtml($translate( // @translate
+        $html .= $renderer->escapeHtml($translate(
             'This installation does not include the embedded editor, so editing eXeLearning content is disabled.'
             . ' Official release packages include it; development checkouts must build it with "make build-editor".'
         ));

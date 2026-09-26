@@ -305,6 +305,7 @@ package:
 generate-pot:
 	@echo "Extracting strings using xgettext..."
 	find . -path ./vendor -prune -o -path ./exelearning -prune -o -path ./dist -prune -o \
+		-path ./test -prune -o -path ./node_modules -prune -o -path ./analysis -prune -o -path ./legacy -prune -o \
 		\( -name '*.php' -o -name '*.phtml' \) -print \
 	| xargs xgettext \
 	    --language=PHP \
@@ -340,10 +341,16 @@ check-untranslated:
 		else \
 			echo "  All strings translated!"; \
 		fi; \
+		FUZZY=$$(msgattrib --only-fuzzy "$$po" 2>/dev/null | grep -c "^#, fuzzy" || true); \
+		if [ "$$FUZZY" -gt 0 ]; then \
+			echo "  Warning: $$FUZZY fuzzy string(s) (msgmerge guesses, ignored at runtime):"; \
+			msgattrib --only-fuzzy "$$po" 2>/dev/null | grep -A1 "^#, fuzzy" | grep "^msgid" | head -10; \
+			FOUND_UNTRANSLATED=1; \
+		fi; \
 	done; \
 	if [ "$$FOUND_UNTRANSLATED" -eq 1 ]; then \
 		echo ""; \
-		echo "Error: Untranslated strings found. Run 'make update-po' and translate."; \
+		echo "Error: Untranslated or fuzzy strings found. Run 'make update-po', translate, and clear #, fuzzy."; \
 		exit 1; \
 	fi
 
