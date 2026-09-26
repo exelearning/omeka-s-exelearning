@@ -239,6 +239,38 @@ class StylesServiceTest extends TestCase
         @unlink($zip);
     }
 
+    public function testInstallRefusesWhenStorageCannotBeProtected(): void
+    {
+        $storage = $this->svc->getStorageDir();
+        mkdir($storage, 0555, true);
+        $zip = $this->makeZip(['config.xml' => $this->configXml('acme'), 'style.css' => 'a{}']);
+        try {
+            $this->svc->installFromZip($zip);
+            $this->fail('install must fail without the deny-all rule');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('.htaccess', $e->getMessage());
+            $this->assertDirectoryDoesNotExist($storage . '/acme');
+        } finally {
+            chmod($storage, 0755);
+            @unlink($zip);
+        }
+    }
+
+    public function testValidateRejectsOversizedConfigXml(): void
+    {
+        $zip = $this->makeZip([
+            'config.xml' => str_repeat(' ', StylesService::MAX_CONFIG_XML_BYTES + 1),
+            'style.css' => 'a{}',
+        ]);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('config.xml is too large.');
+        try {
+            $this->svc->validateZip($zip);
+        } finally {
+            @unlink($zip);
+        }
+    }
+
     public function testInstallFromZipRejectsPhpSmuggledBehindAllowedExtension(): void
     {
         $zip = $this->makeZip([
