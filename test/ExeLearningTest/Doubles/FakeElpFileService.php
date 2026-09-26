@@ -29,6 +29,12 @@ class FakeElpFileService
     /** @var int How many times processUploadedFile() was called. */
     public int $processCalls = 0;
 
+    /** @var string|null Recorded reason the last processing attempt failed. */
+    public $processingError = null;
+
+    /** @var array<int, string> Hashes passed to cleanupMediaByHash(). */
+    public array $cleanedHashes = [];
+
     public function __construct(
         ?string $hash,
         bool $hasScreenshot,
@@ -81,8 +87,30 @@ class FakeElpFileService
     {
         $this->processCalls++;
         if ($this->processException !== null) {
+            $this->processingError = $this->processException->getMessage();
             throw $this->processException;
         }
         return $this->processResult;
+    }
+
+    /**
+     * @param mixed $media
+     */
+    public function getProcessingError($media): ?string
+    {
+        return $this->processingError;
+    }
+
+    /**
+     * @param mixed $media
+     */
+    public function hasProcessingError($media): bool
+    {
+        return $this->processingError !== null;
+    }
+
+    public function cleanupMediaByHash(string $hash): void
+    {
+        $this->cleanedHashes[] = $hash;
     }
 }

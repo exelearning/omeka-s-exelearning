@@ -8,8 +8,7 @@ namespace ExeLearningTest\Doubles;
  * Request whose URI can be varied per test.
  *
  * The shared Laminas\Uri\Http stub is fixed at http://localhost/admin/media/1;
- * buildContentUrl() has to be exercised across schemes, ports and base paths,
- * which is what this double provides.
+ * this double lets a test vary the scheme, port and base path.
  */
 class FakeHttpRequest
 {

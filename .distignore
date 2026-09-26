@@ -7,6 +7,11 @@
 #
 # The bundled editor under dist/static/ is a release artifact and must stay in
 # the package -- see ADR-28-01. Do not add a `dist` rule here.
+#
+# `make build-editor` also drops a local symlink at asset/static -> ../dist/static
+# so Omeka can serve the same tree during development. zip follows that symlink
+# unless -y is passed, so leaving it in the staging tree ships the editor twice
+# (~2x the ZIP). Exclude the symlink; runtime loads dist/static/ only.
 
 # VCS and CI
 .git
@@ -26,10 +31,13 @@ CLAUDE.md
 .aider*
 .DS_Store
 .env
+node_modules
 
 # Build inputs. Only the built editor in dist/static/ ships; the editor
-# checkout it is built from does not.
+# checkout it is built from does not. The asset/static symlink is local-only
+# (see the header comment); asset/css, asset/js and asset/thumbnails do ship.
 /exelearning/
+/asset/static
 vendor/
 themes/
 

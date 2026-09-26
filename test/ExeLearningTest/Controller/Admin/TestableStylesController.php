@@ -18,6 +18,7 @@ class TestableStylesController extends StylesController
     public bool $allowedFlag;
     public bool $stubRequestIsPost = true;
     public array $stubPost = [];
+    public bool $csrfValid = true;
     public ?array $lastRedirect = null;
     public array $messengerSuccess = [];
     public array $messengerError = [];
@@ -58,15 +59,21 @@ class TestableStylesController extends StylesController
 
     public function getRequest(): object
     {
-        return new class($this->stubRequestIsPost) {
+        return new class($this->stubRequestIsPost, $this->stubPost) {
             private bool $post;
-            public function __construct(bool $post)
+            private array $data;
+            public function __construct(bool $post, array $data)
             {
                 $this->post = $post;
+                $this->data = $data;
             }
             public function isPost(): bool
             {
                 return $this->post;
+            }
+            public function getPost($name = null, $default = null)
+            {
+                return $this->data[$name] ?? $default;
             }
         };
     }
@@ -111,5 +118,10 @@ class TestableStylesController extends StylesController
     protected function allowed(): bool
     {
         return $this->allowedFlag;
+    }
+
+    protected function csrfTokenIsValid(string $token): bool
+    {
+        return $this->csrfValid;
     }
 }

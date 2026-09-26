@@ -1,17 +1,23 @@
 ---
 name: Architecture records
 
-# Deliberately unfiltered.
+# Runs for code and architecture records; skips changes limited to agent skills.
 #
 # ci.yml skips '**.md' and 'docs/**', so an ADR-only pull request would run no
 # job at all -- exactly the pull request this validator exists to police. And a
 # code-only pull request can break the records too, by leaving a retired
 # identifier in a comment, so filtering this workflow the other way would be
-# just as wrong. It runs on everything instead; it is a few seconds of PHP with
+# just as wrong. Only agent-skill updates are excluded; it is a few seconds of PHP with
 # no dependency install.
 on:
   pull_request:
+    paths-ignore:
+      - '.agents/skills/**'
+      - '.claude/skills/**'
   push:
+    paths-ignore:
+      - '.agents/skills/**'
+      - '.claude/skills/**'
     tags:
       - '*'
     branches:

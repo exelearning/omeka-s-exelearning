@@ -176,7 +176,7 @@ class StylesControllerTest extends TestCase
 
         $ctrl = new TestableStylesController($this->svc, true);
         $ctrl->stubRequestIsPost = true;
-        $ctrl->stubPost = ['slug' => 'acme', 'enabled' => 0];
+        $ctrl->stubPost = ['slug' => 'acme', 'enabled' => 0, 'csrf' => 'token'];
         $ctrl->toggleUploadedAction();
 
         $this->assertFalse($this->svc->getRegistry()['uploaded']['acme']['enabled']);
@@ -196,7 +196,7 @@ class StylesControllerTest extends TestCase
     {
         $ctrl = new TestableStylesController($this->svc, true);
         $ctrl->stubRequestIsPost = true;
-        $ctrl->stubPost = ['id' => 'zen', 'enabled' => 0];
+        $ctrl->stubPost = ['id' => 'zen', 'enabled' => 0, 'csrf' => 'token'];
         $ctrl->toggleBuiltinAction();
         $this->assertSame(['zen'], $this->svc->getRegistry()['disabled_builtins']);
     }
@@ -209,7 +209,7 @@ class StylesControllerTest extends TestCase
 
         $ctrl = new TestableStylesController($this->svc, true);
         $ctrl->stubRequestIsPost = true;
-        $ctrl->stubPost = ['slug' => 'goodbye'];
+        $ctrl->stubPost = ['slug' => 'goodbye', 'csrf' => 'token'];
         $ctrl->deleteAction();
 
         $this->assertArrayNotHasKey('goodbye', $this->svc->getRegistry()['uploaded']);
@@ -230,13 +230,48 @@ class StylesControllerTest extends TestCase
     {
         $ctrl = new TestableStylesController($this->svc, true);
         $ctrl->stubRequestIsPost = true;
-        $ctrl->stubPost = ['enabled' => 1];
+        $ctrl->stubPost = ['enabled' => 1, 'csrf' => 'token'];
         $ctrl->toggleBlockImportAction();
         $this->assertTrue($this->svc->isImportBlocked());
 
-        $ctrl->stubPost = ['enabled' => 0];
+        $ctrl->stubPost = ['enabled' => 0, 'csrf' => 'token'];
         $ctrl->toggleBlockImportAction();
         $this->assertFalse($this->svc->isImportBlocked());
+    }
+
+    public function testStateChangingActionsRejectMissingCsrfToken(): void
+    {
+        $zip = $this->makeZip('keep', 'x{}');
+        $this->svc->installFromZip($zip, 'keep.zip');
+
+        $ctrl = new TestableStylesController($this->svc, true);
+        $ctrl->stubRequestIsPost = true;
+        $ctrl->stubPost = ['slug' => 'keep', 'id' => 'zen', 'enabled' => 1];
+        $ctrl->deleteAction();
+        $ctrl->toggleUploadedAction();
+        $ctrl->toggleBuiltinAction();
+        $ctrl->toggleBlockImportAction();
+
+        $registry = $this->svc->getRegistry();
+        $this->assertArrayHasKey('keep', $registry['uploaded']);
+        $this->assertTrue($registry['uploaded']['keep']['enabled']);
+        $this->assertSame([], $registry['disabled_builtins'] ?? []);
+        $this->assertFalse($this->svc->isImportBlocked());
+        $this->assertCount(4, $ctrl->messengerError);
+        $this->assertSame(['redirect' => 'admin/exelearning-styles'], $ctrl->lastRedirect);
+        @unlink($zip);
+    }
+
+    public function testStateChangingActionsRejectInvalidCsrfToken(): void
+    {
+        $ctrl = new TestableStylesController($this->svc, true);
+        $ctrl->csrfValid = false;
+        $ctrl->stubRequestIsPost = true;
+        $ctrl->stubPost = ['enabled' => 1, 'csrf' => 'forged'];
+        $ctrl->toggleBlockImportAction();
+
+        $this->assertFalse($this->svc->isImportBlocked());
+        $this->assertCount(1, $ctrl->messengerError);
     }
 
     // ------------------------------------------------------------------

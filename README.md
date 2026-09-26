@@ -1,7 +1,7 @@
 # eXeLearning
 [![CI](https://img.shields.io/github/actions/workflow/status/exelearning/omeka-s-exelearning/ci.yml?branch=main&label=CI)](https://github.com/exelearning/omeka-s-exelearning/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/exelearning/omeka-s-exelearning/graph/badge.svg)](https://codecov.io/gh/exelearning/omeka-s-exelearning)
-![Omeka S Version](https://img.shields.io/badge/Omeka_S-%3E%3D3.0-blue)
+![Omeka S Version](https://img.shields.io/badge/Omeka_S-%3E%3D4.0-blue)
 ![PHP Version](https://img.shields.io/badge/PHP-%3E%3D%207.4-8892bf)
 ![License: AGPL v3](https://img.shields.io/badge/License-AGPLv3-blue.svg)
 ![Downloads](https://img.shields.io/github/downloads/exelearning/omeka-s-exelearning/total)
@@ -17,7 +17,7 @@ Omeka S module for eXeLearning content management. Upload, view and edit eXeLear
 
 ## Features
 
-- **ELPX File Support**: Upload and manage eXeLearning `.elpx` files through Omeka S
+- **ELPX File Support**: Upload and manage eXeLearning `.elpx` files through Omeka S (only `.elpx`; plain `.zip` uploads are left to the rest of the installation)
 - **Automatic Extraction**: ELPX files are automatically extracted and ready to display
 - **Embedded Editor**: Edit eXeLearning content directly from Omeka S without leaving the browser
 - **Automatic Thumbnails**: Generates visual thumbnails from the content's first page
@@ -36,8 +36,11 @@ Omeka S module for eXeLearning content management. Upload, view and edit eXeLear
 Add these rules to your nginx configuration:
 
 ```nginx
-# Block direct access to extracted files
+# Block direct access to extracted files and uploaded styles
 location ^~ /files/exelearning/ {
+    return 403;
+}
+location ^~ /files/exelearning-styles/ {
     return 403;
 }
 
@@ -49,17 +52,20 @@ location ^~ /files/exelearning-preview/ {
     return 403;
 }
 
-# Route content proxy to PHP
+# Route content proxy and style assets to PHP
 location ^~ /exelearning/content/ {
+    try_files $uri /index.php$is_args$args;
+}
+location ^~ /exelearning/styles/ {
     try_files $uri /index.php$is_args$args;
 }
 ```
 
 Apache is supported automatically via the included `.htaccess` deny guards
-(one for the extracted-content store, one written into the preview session
-store). **Non-Apache deployments MUST deny direct web access to both
-`{file_store}/exelearning` and `{file_store}/exelearning-preview`** — nginx and
-other servers do not read `.htaccess`.
+(written into the extracted-content store, the preview session store and the
+styles store). **Non-Apache deployments MUST deny direct web access to
+`{file_store}/exelearning`, `{file_store}/exelearning-preview` and
+`{file_store}/exelearning-styles`** — nginx and other servers do not read `.htaccess`.
 
 ### From Source (Development)
 
@@ -128,6 +134,28 @@ test and on line coverage below `MIN_COVERAGE` (90%), and writes its reports to
 pull requests but does not block them — see
 [ADR-32-01](docs/architecture/adr/ADR-32-01-use-a-single-blocking-whole-module-coverage-gate.md).
 
+### Releasing
+
+Module releases are normally automatic: whenever the editor publishes a release,
+`check-editor-releases.yml` bundles it, records its tag in `.editor-version` and
+publishes the module with the same version number.
+
+To ship a module-only change before the next editor release, tag a SemVer
+pre-release of the *next* version and push the tag:
+
+```bash
+git tag v4.0.6-rc.1 && git push origin v4.0.6-rc.1
+```
+
+`release.yml` then packages module `4.0.6-rc.1` with the editor named in
+`.editor-version` (still `v4.0.5`) and marks the GitHub release as a
+pre-release, so "latest" keeps pointing at the last stable version. Omeka S
+orders `4.0.5 < 4.0.6-rc.1 < 4.0.6`, so sites upgrade in sequence. Valid module
+versions are `X.Y.Z` and `X.Y.Z-(alpha|beta|rc).N` only: Omeka S parses them
+with Composer's semver library, which rejects other labels, and `make package`
+refuses them. Run the workflow manually to override the editor ref. See
+[ADR-40-01](docs/architecture/adr/ADR-40-01-decouple-module-version-from-bundled-editor-version.md).
+
 ### Architecture documentation
 
 Architecture Decision Records (ADRs) and change documents live under
@@ -147,7 +175,7 @@ make architecture-check     # validate identifiers, metadata, cross-references
 
 ## Requirements
 
-- Omeka S 3.0 or higher
+- Omeka S 4.0 or higher
 - PHP 7.4 or higher with ZipArchive extension
 
 ## Issues and Support

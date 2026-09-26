@@ -80,7 +80,9 @@
 
             var iframeWindow = this.iframe.contentWindow;
             if (iframeWindow) {
-                iframeWindow.postMessage({ type: 'exelearning-request-save' }, '*');
+                // The editor is served same-origin; never broadcast to
+                // whatever origin the iframe may have navigated to.
+                iframeWindow.postMessage({ type: 'exelearning-request-save' }, window.location.origin);
             }
         },
 

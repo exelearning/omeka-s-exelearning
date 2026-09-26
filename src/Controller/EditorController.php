@@ -60,15 +60,13 @@ class EditorController extends AbstractActionController
             return $this->redirect()->toRoute('admin');
         }
 
-        $acl = $this->getEvent()->getApplication()->getServiceManager()->get('Omeka\Acl');
-        if (!$acl->userIsAllowed('Omeka\Entity\Media', 'update')) {
+        // Per-media check: authors may only edit media they own.
+        if (!$media->userIsAllowed('update')) {
             $this->messenger()->addError($this->translate('You do not have permission to edit media.')); // @translate
             return $this->redirect()->toRoute('admin');
         }
 
-        $filename = $media->filename();
-        $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
-        if (!in_array($extension, ['elpx', 'zip'])) {
+        if (!ElpFileService::isExeLearningMedia($media)) {
             $this->messenger()->addError($this->translate('This is not an eXeLearning file.')); // @translate
             return $this->redirect()->toRoute('admin');
         }
@@ -258,9 +256,7 @@ class EditorController extends AbstractActionController
             return $response;
         }
 
-        $filename = $media->filename();
-        $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
-        if (!in_array($extension, ['elpx', 'zip'])) {
+        if (!ElpFileService::isExeLearningMedia($media)) {
             $response = $this->getResponse();
             $response->setStatusCode(400);
             $response->setContent('Not an eXeLearning file');

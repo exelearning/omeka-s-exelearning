@@ -16,6 +16,15 @@ class MediaRepresentation
     private array $mediaData;
     private ?object $item;
 
+    /** @var string What render() returns; also records that it was called. */
+    public string $rendered = '';
+
+    /** @var int How many times render() was called. */
+    public int $renderCalls = 0;
+
+    /** @var bool Returned by userIsAllowed(), standing in for the per-entity ACL. */
+    public bool $userIsAllowed = true;
+
     public function __construct(
         string $originalUrl,
         string $displayTitle,
@@ -60,5 +69,20 @@ class MediaRepresentation
     public function item(): ?object
     {
         return $this->item;
+    }
+
+    public function userIsAllowed(string $privilege): bool
+    {
+        return $this->userIsAllowed;
+    }
+
+    /**
+     * Omeka resolves the media's `renderer` column through
+     * Omeka\Media\Renderer\Manager and delegates here.
+     */
+    public function render(array $options = []): string
+    {
+        $this->renderCalls++;
+        return $this->rendered;
     }
 }

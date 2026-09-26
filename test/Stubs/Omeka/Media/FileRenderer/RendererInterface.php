@@ -9,5 +9,5 @@ use Omeka\Api\Representation\MediaRepresentation;
 
 interface RendererInterface
 {
-    public function render(PhpRenderer $view, MediaRepresentation $media, array $options = []): string;
+    public function render(PhpRenderer $view, MediaRepresentation $media, array $options = []);
 }

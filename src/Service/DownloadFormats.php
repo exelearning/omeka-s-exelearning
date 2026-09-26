@@ -19,35 +19,35 @@ final class DownloadFormats
         return [
             [
                 'id' => 'elpx',
-                'label' => 'Download .elpx',
+                'label' => 'Download .elpx', // @translate
                 'suffix' => '.elpx',
                 'mime' => 'application/zip',
                 'client' => false,
             ],
             [
                 'id' => 'html5',
-                'label' => 'Web',
+                'label' => 'Web', // @translate
                 'suffix' => '_web.zip',
                 'mime' => 'application/zip',
                 'client' => true,
             ],
             [
                 'id' => 'scorm12',
-                'label' => 'SCORM 1.2',
+                'label' => 'SCORM 1.2', // @translate
                 'suffix' => '_scorm.zip',
                 'mime' => 'application/zip',
                 'client' => true,
             ],
             [
                 'id' => 'ims',
-                'label' => 'IMS Package',
+                'label' => 'IMS Package', // @translate
                 'suffix' => '_ims.zip',
                 'mime' => 'application/zip',
                 'client' => true,
             ],
             [
                 'id' => 'epub3',
-                'label' => 'EPUB3',
+                'label' => 'EPUB3', // @translate
                 'suffix' => '.epub',
                 'mime' => 'application/epub+zip',
                 'client' => true,
@@ -118,27 +118,6 @@ final class DownloadFormats
         return null;
     }
 
-    /**
-     * Read the enabled formats from Omeka settings, falling back to defaults.
-     *
-     * @param mixed $settings  An Omeka\Settings\Settings-like object with a
-     *                         `get($key, $default)` method, or null.
-     * @return string[]
-     */
-    public static function fromSettings($settings): array
-    {
-        if (!$settings || !is_object($settings) || !method_exists($settings, 'get')) {
-            return self::enabledByDefault();
-        }
-        $stored = $settings->get('exelearning_download_formats', null);
-        if (is_string($stored)) {
-            $decoded = json_decode($stored, true);
-            if (is_array($decoded)) {
-                $stored = $decoded;
-            }
-        }
-        return $stored === null ? self::enabledByDefault() : self::sanitize($stored);
-    }
 
     /**
      * Render the multi-format split-button as HTML.

@@ -94,45 +94,9 @@ final class DownloadFormatsTest extends TestCase
         $this->assertSame(['elpx', 'html5', 'scorm12'], DownloadFormats::enabledByDefault());
     }
 
-    public function testFromSettingsFallsBackToEnabledByDefaultWhenSettingsNull(): void
-    {
-        $this->assertSame(DownloadFormats::enabledByDefault(), DownloadFormats::fromSettings(null));
-    }
 
-    public function testFromSettingsReadsStoredArray(): void
-    {
-        $settings = new class () {
-            public function get($key, $default = null)
-            {
-                return $key === 'exelearning_download_formats' ? ['epub3', 'html5'] : $default;
-            }
-        };
-        $this->assertSame(['html5', 'epub3'], DownloadFormats::fromSettings($settings));
-    }
 
-    public function testFromSettingsDecodesJsonStringValue(): void
-    {
-        $settings = new class () {
-            public function get($key, $default = null)
-            {
-                return $key === 'exelearning_download_formats'
-                    ? json_encode(['ims', 'scorm12'])
-                    : $default;
-            }
-        };
-        $this->assertSame(['scorm12', 'ims'], DownloadFormats::fromSettings($settings));
-    }
 
-    public function testFromSettingsFallsBackOnMissingKey(): void
-    {
-        $settings = new class () {
-            public function get($key, $default = null)
-            {
-                return $default;
-            }
-        };
-        $this->assertSame(DownloadFormats::enabledByDefault(), DownloadFormats::fromSettings($settings));
-    }
 
     public function testRenderSplitButtonReturnsEmptyForEmptyList(): void
     {
@@ -282,8 +246,14 @@ final class DownloadFormatsTest extends TestCase
     private function makeMedia(int $id = 1, string $filename = 'test.elpx', string $url = 'http://example.com/original/file.elpx'): object
     {
         return new class ($id, $filename, $url) {
-            public function __construct(private int $id_, private string $filename_, private string $url_)
+            private int $id_;
+            private string $filename_;
+            private string $url_;
+            public function __construct(int $id, string $filename, string $url)
             {
+                $this->id_ = $id;
+                $this->filename_ = $filename;
+                $this->url_ = $url;
             }
             public function id(): int
             {

@@ -5,7 +5,7 @@ description: "Use when working on this Omeka S module's structure: Module.php li
 
 # Omeka S Module Development
 
-Compatibility: Omeka S >= 3.0 on PHP >= 7.4 (composer.json pins the 7.4 platform; CI runs 8.3). Laminas MVC 3 / ServiceManager 3.
+Compatibility: Omeka S >= 4.0 on PHP >= 7.4 (composer.json pins the 7.4 platform; CI runs 8.3). Laminas MVC 3 / ServiceManager 3.
 
 
 ## When to use
@@ -26,7 +26,7 @@ src/Service/                ElpFileService, StylesService, EditorBundle, Downloa
 src/Media/FileRenderer/     ExeLearningRenderer (registered as `exelearning_renderer`)
 src/Form/                   ConfigForm, StylesUploadForm
 view/                       .phtml partials, resolved via template_path_stack
-configured files/exelearning/ extracted ELPX content; resolve through the service factory
+configured files/exelearning/ extracted ELPX content; resolve the files dir with Service\FilesPath
 dist/static/                the bundled editor -- a release artifact, see ADR-28-01
 ```
 
@@ -42,9 +42,23 @@ and must be **idempotent** — Omeka can re-run an upgrade, and a partially
 installed module still has to uninstall cleanly.
 
 - `install()` widens `media_type_whitelist` and `extension_whitelist` through
-  `Omeka\Settings`, then creates the data directory. Always merge into the
-  existing whitelist and re-index with `array_values()`: Omeka serialises these
-  as JSON arrays, and a gapped key list becomes a JSON object instead.
+  `Omeka\Settings`. Always merge into the existing whitelist and re-index with
+  `array_values()`: Omeka serialises these as JSON arrays, and a gapped key list
+  becomes a JSON object instead. Claim only what `.elpx` needs -- these lists are
+  installation-wide -- record the entries the module itself added in
+  `exelearning_whitelist_additions`, and have `uninstall()` take back exactly
+  those. Never write back a whitelist that was read empty: Omeka's file validator
+  reads an empty list as "allow nothing".
+- `upgrade()` also withdraws `Module::LEGACY_WHITELIST_ADDITIONS` -- values older
+  releases added without recording provenance. Withdraw such a value without
+  claiming it in the bookkeeping setting, so `uninstall()` never subtracts
+  entries the module cannot prove it added.
+- To decide whether a site page already renders media, read Omeka's resolved
+  configuration, never the mere existence of a helper or service:
+  `Omeka\Site\ThemeManager::getCurrentTheme()` plus
+  `Omeka\ResourcePageBlockLayoutManager::getResourcePageBlocks($theme)`, exactly
+  as core's `ResourcePageBlocksFactory` does. `mediaEmbeds` is a removable
+  default, so its presence in the resolved blocks is the only reliable answer.
 - `uninstall()` and `upgrade()` both call `removeEditorInstallerSettings()`.
   Deleting a key that was never set must not fail.
 - Adding a new setting means deciding what `uninstall()` does with it. Leaving
@@ -60,7 +74,7 @@ controller. Register in the matching section:
 | Controller | `controllers.factories` + a short alias in `controllers.aliases` |
 | Service | `service_manager.factories` |
 | Form | `form_elements.invokables` |
-| Media renderer | `file_renderers.factories` (+ MIME/extension `aliases`) |
+| Media renderer | `media_renderers.factories` (the `renderer` column); `file_renderers.aliases` only for legacy media whose column is `file` |
 | Route | `router.routes` |
 
 Factories are excluded from the coverage requirement, so keep them to wiring
@@ -90,7 +104,7 @@ Three rules this module already enforces; keep them intact.
 URLs are built from the **request URI**, not `getBasePath()`. In the PHP-WASM
 playground the prefix (`/playground/{uuid}/php83/`) is present in the request URI
 but missing from `$_SERVER['SCRIPT_NAME']`, so `getBasePath()` lies.
-`Module::extractBasePath()` derives the prefix by truncating at the first
+`extractBasePath()` (in the controllers and the renderer) derives the prefix by truncating at the first
 `/admin/`, `/s/` or `/api/` segment. Any new URL construction must go through the
 same helper, and prefer emitting a **relative** content path that the client
 resolves against `window.location`.

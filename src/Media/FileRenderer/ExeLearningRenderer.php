@@ -4,18 +4,28 @@ declare(strict_types=1);
 namespace ExeLearning\Media\FileRenderer;
 
 use Omeka\Api\Representation\MediaRepresentation;
-use Omeka\Media\FileRenderer\RendererInterface;
+use Omeka\Media\FileRenderer\RendererInterface as FileRendererInterface;
+use Omeka\Media\Renderer\RendererInterface as MediaRendererInterface;
 use Laminas\View\Renderer\PhpRenderer;
 use ExeLearning\Service\ElpFileService;
 use ExeLearning\Service\DownloadFormats;
+use ExeLearning\Service\EditorBundle;
 use ExeLearning\Service\IframeSandbox;
 
 /**
  * Renderer for eXeLearning files.
  *
  * Displays the extracted HTML content in an iframe with an optional edit button.
+ *
+ * Registered under both `media_renderers` and `file_renderers`, and so
+ * implements both interfaces. Omeka resolves a media's `renderer` column
+ * through `Omeka\Media\Renderer\Manager`, whose `$instanceOf` is the
+ * media-renderer interface; `file_renderers` is consulted only when that column
+ * is the literal `file`, which covers media stored before this module claimed
+ * them. The two interfaces declare the same method with no return type, so the
+ * narrower `: string` below satisfies both.
  */
-class ExeLearningRenderer implements RendererInterface
+class ExeLearningRenderer implements FileRendererInterface, MediaRendererInterface
 {
     /** @var ElpFileService */
     protected $elpService;
@@ -40,8 +50,6 @@ class ExeLearningRenderer implements RendererInterface
      * @param MediaRepresentation $media
      * @param array $options
      * @return string
-     *
-     * @codeCoverageIgnore
      */
     public function render(PhpRenderer $view, MediaRepresentation $media, array $options = []): string
     {
@@ -94,9 +102,11 @@ class ExeLearningRenderer implements RendererInterface
         }
 
         $iframeId = 'exelearning-iframe-' . $media->id();
+        $viewerId = 'exelearning-viewer-' . $media->id();
 
         // Build HTML
-        $html = '<div class="exelearning-viewer" data-media-id="' . $media->id() . '">';
+        $html = '<div class="exelearning-viewer" id="' . $viewerId . '" ';
+        $html .= 'data-media-id="' . $media->id() . '">';
 
         // Toolbar
         $html .= '<div class="exelearning-toolbar">';
@@ -110,6 +120,15 @@ class ExeLearningRenderer implements RendererInterface
             $html .= DownloadFormats::renderSplitButton($view, $media, $downloadFormatIds, $variant);
         }
 
+        // Open in a new tab. href is filled in by the inline script below,
+        // for the same base-path reason as the iframe src.
+        $html .= '<a class="button exelearning-open-tab-btn" ';
+        $html .= 'data-exe-content-path="' . $view->escapeHtmlAttr($contentPath) . '" ';
+        $html .= 'target="_blank" rel="noopener noreferrer">';
+        $html .= '<span class="icon-external" aria-hidden="true"></span> ';
+        $html .= $view->translate('Open fullscreen');
+        $html .= '</a>';
+
         // Fullscreen button
         $html .= '<button type="button" class="button exelearning-fullscreen-btn" ';
         $html .= 'data-target="' . $iframeId . '">';
@@ -117,15 +136,24 @@ class ExeLearningRenderer implements RendererInterface
         $html .= $view->translate('Fullscreen');
         $html .= '</button>';
 
-        // No edit button here: editing .elpx is an admin-only action, offered
-        // by the admin media-show viewer. This renderer (which can appear on
-        // public pages) stays view + fullscreen only.
+        // Editing is admin-only, so the button appears only on an admin request
+        // for a user who may update the media and only when the editor bundle
+        // shipped with this package. The modal it drives is injected by the
+        // admin media-show hook.
+        $html .= $this->renderEditButton($view, $media);
 
         $html .= '</div>'; // toolbar-actions
         $html .= '</div>'; // toolbar
 
         // Iframe — src is set by inline JS so the playground SW scope prefix
         // from window.location is correctly prepended to the content path.
+        //
+        // Sandbox tokens come from the iframe-mode setting (default secure).
+        // Secure = opaque origin (no allow-same-origin): package HTML/JS cannot
+        // reach the Omeka page, its cookies or its DOM (ADR-39-02). Legacy
+        // restores allow-same-origin only where an opaque iframe cannot be
+        // served (the php-wasm Playground, whose service worker only intercepts
+        // same-origin documents).
         $html .= '<iframe ';
         $html .= 'id="' . $iframeId . '" ';
         $html .= 'data-exe-content-path="' . $view->escapeHtmlAttr($contentPath) . '" ';
@@ -136,15 +164,59 @@ class ExeLearningRenderer implements RendererInterface
         $html .= 'allowfullscreen>';
         $html .= '</iframe>';
 
+        // Build content URLs from window.location so the playground service
+        // worker scope prefix (/playground/{uuid}/php83/) is included — PHP
+        // cannot see it, JS can. Scoped to this viewer so several eXeLearning
+        // media on one page do not each rewrite the others' elements.
         $html .= '<script>(function(){';
-        $html .= 'var h=window.location.href,b=h;';
-        $html .= '["/admin/","/s/","/api/"].some(function(m){var i=h.indexOf(m);if(i!==-1){b=h.substring(0,i);return true;}return false;});';
+        // Cut at the EARLIEST marker (same rule as the controllers'
+        // extractBasePath): a site slug such as "admin" puts "/admin/" after "/s/".
+        $html .= 'var h=window.location.href,b=h,e=-1;';
+        $html .= '["/admin/","/s/","/api/"].forEach(function(m){var i=h.indexOf(m);if(i!==-1&&(e===-1||i<e))e=i;});';
+        $html .= 'if(e!==-1)b=h.substring(0,e);';
         $html .= 'window.exelearningContentBase=b;';
-        $html .= 'var el=document.getElementById("' . $iframeId . '");';
-        $html .= 'if(el)el.src=b+el.getAttribute("data-exe-content-path");';
+        $html .= 'var r=document.getElementById("' . $viewerId . '");';
+        $html .= 'if(!r)return;';
+        $html .= 'r.querySelectorAll("[data-exe-content-path]").forEach(function(el){';
+        $html .= 'var u=b+el.getAttribute("data-exe-content-path");';
+        $html .= 'if(el.tagName==="IFRAME"){el.src=u;}else{el.href=u;}';
+        $html .= '});';
         $html .= '})();</script>';
 
         $html .= '</div>'; // exelearning-viewer
+
+        return $html;
+    }
+
+    /**
+     * The "Edit in eXeLearning" button, or an empty string when editing is not
+     * offered on this request.
+     *
+     * @param PhpRenderer $view
+     * @param MediaRepresentation $media
+     * @return string
+     */
+    protected function renderEditButton(PhpRenderer $view, MediaRepresentation $media): string
+    {
+        if (!$this->isAdminRequest() || !EditorBundle::isAvailable()) {
+            return '';
+        }
+
+        try {
+            if (!$view->identity() || !$media->userIsAllowed('update')) {
+                return '';
+            }
+            $editUrl = $view->url('admin/exelearning-editor', ['action' => 'edit', 'id' => $media->id()]);
+        } catch (\Throwable $e) {
+            return '';
+        }
+
+        $html = '<button type="button" class="button exelearning-edit-btn" ';
+        $html .= 'onclick="ExeLearningEditor.open(' . (int) $media->id();
+        $html .= ", '" . $view->escapeJs($editUrl) . "')\">";
+        $html .= '<span class="o-icon-edit" aria-hidden="true"></span> ';
+        $html .= $view->translate('Edit in eXeLearning');
+        $html .= '</button>';
 
         return $html;
     }
@@ -178,42 +250,7 @@ class ExeLearningRenderer implements RendererInterface
         return $html;
     }
 
-    /**
-     * Build an absolute content proxy URL for the given hash.
-     *
-     * Derives the base path from the actual request URI path so that the
-     * playground prefix (/playground/{uuid}/php83/) is correctly included
-     * even in PHP-WASM environments where getBasePath() is unreliable.
-     */
-    protected function buildContentUrl(string $hash): string
-    {
-        $uri = $this->request->getUri();
-        $scheme = $uri->getScheme();
-        $port = $uri->getPort();
-        $serverUrl = $scheme . '://' . $uri->getHost();
-        if ($port && !(($scheme === 'http' && $port == 80) || ($scheme === 'https' && $port == 443))) {
-            $serverUrl .= ':' . $port;
-        }
-        $basePath = $this->extractBasePath($uri->getPath());
-        return $serverUrl . $basePath . '/exelearning/content/' . $hash . '/index.html';
-    }
 
-    /**
-     * Derive the Omeka base path from the actual request URI path.
-     *
-     * Strips everything from the first known Omeka route segment onward.
-     * Reliable in PHP-WASM where the full URL path is preserved in the URI.
-     */
-    protected function extractBasePath(string $uriPath): string
-    {
-        foreach (['/admin/', '/s/', '/api/'] as $marker) {
-            $pos = strpos($uriPath, $marker);
-            if ($pos !== false) {
-                return substr($uriPath, 0, $pos);
-            }
-        }
-        return '';
-    }
 
     /**
      * Whether teachers may reveal teacher-only content for this media.
@@ -251,13 +288,7 @@ class ExeLearningRenderer implements RendererInterface
 
     protected function isExeLearningFile(MediaRepresentation $media): bool
     {
-        $filename = $media->filename();
-        if (!$filename) {
-            return false;
-        }
-
-        $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
-        return in_array($extension, ['elpx', 'zip']);
+        return ElpFileService::isExeLearningMedia($media);
     }
 
     /**

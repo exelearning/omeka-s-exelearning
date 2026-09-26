@@ -59,11 +59,13 @@ $configScript = <<<SCRIPT
             if (!cfg) return;
             var href = window.location.href;
             var base = href;
-            ['/admin/', '/s/', '/api/'].some(function(m) {
+            var earliest = -1;
+            // Earliest marker wins, as in the controllers' extractBasePath().
+            ['/admin/', '/s/', '/api/'].forEach(function(m) {
                 var idx = href.indexOf(m);
-                if (idx !== -1) { base = href.substring(0, idx); return true; }
-                return false;
+                if (idx !== -1 && (earliest === -1 || idx < earliest)) { earliest = idx; }
             });
+            if (earliest !== -1) { base = href.substring(0, earliest); }
             // Fix saveEndpoint (must go through the playground PHP context)
             if (cfg.saveEndpoint) {
                 var m = cfg.saveEndpoint.match(/\/api\/exelearning\/.+/);

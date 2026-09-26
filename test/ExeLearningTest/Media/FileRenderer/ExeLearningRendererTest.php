@@ -17,6 +17,9 @@ use ReflectionClass;
  */
 class ExeLearningRendererTest extends TestCase
 {
+    /** A well-formed extraction hash, as generateHash() produces. */
+    private const PREVIEW_HASH = 'da39a3ee5e6b4b0d3255bfef95601890afd80709';
+
     private ExeLearningRenderer $renderer;
     private ElpFileService $elpService;
 
@@ -29,6 +32,101 @@ class ExeLearningRendererTest extends TestCase
     private function createMockRequest(): \Laminas\Http\Request
     {
         return new \Laminas\Http\Request();
+    }
+
+    /** An ElpFileService that reports an extracted package with a preview. */
+    private function previewingService(): ElpFileService
+    {
+        $service = $this->createMock(ElpFileService::class);
+        $service->method('getMediaHash')->willReturn(self::PREVIEW_HASH);
+        $service->method('hasPreview')->willReturn(true);
+
+        return $service;
+    }
+
+    private function elpxMedia(int $id = 42): MediaRepresentation
+    {
+        return new MediaRepresentation(
+            'http://example.com/course.elpx',
+            'Course',
+            'course.elpx',
+            $id,
+            ['exelearning_extracted_hash' => self::PREVIEW_HASH, 'exelearning_has_preview' => '1']
+        );
+    }
+
+    /**
+     * Run $test with a valid editor bundle on disk.
+     *
+     * The bundle is a release artifact under the gitignored dist/static/, so it
+     * is present on a developer checkout that ran `make build-editor` and absent
+     * in CI. Branches gated on it would otherwise be covered in one environment
+     * and not the other. Only files this helper created are removed again, so a
+     * real build is never touched.
+     */
+    private function withEditorBundle(callable $test): void
+    {
+        if (\ExeLearning\Service\EditorBundle::isAvailable()) {
+            $test();
+            return;
+        }
+
+        $base = \ExeLearning\Service\EditorBundle::getPath();
+        $created = [];
+        foreach ([$base, $base . '/app'] as $dir) {
+            if (!is_dir($dir)) {
+                mkdir($dir, 0777, true);
+                $created[] = $dir;
+            }
+        }
+        $index = $base . '/index.html';
+        $createdIndex = !file_exists($index);
+        if ($createdIndex) {
+            file_put_contents($index, '<!doctype html><title>editor</title>');
+        }
+
+        try {
+            $test();
+        } finally {
+            if ($createdIndex) {
+                @unlink($index);
+            }
+            foreach (array_reverse($created) as $dir) {
+                @rmdir($dir);
+            }
+        }
+    }
+
+    /**
+     * Run $test with no editor bundle on disk, restoring a real build after.
+     */
+    private function withoutEditorBundle(callable $test): void
+    {
+        $index = \ExeLearning\Service\EditorBundle::getPath() . '/index.html';
+        $saved = is_readable($index) ? file_get_contents($index) : null;
+        if ($saved !== null) {
+            unlink($index);
+        }
+
+        try {
+            $test();
+        } finally {
+            if ($saved !== null) {
+                file_put_contents($index, $saved);
+            }
+        }
+    }
+
+    /**
+     * A request on a given path. The default stub URI is an admin path, which
+     * is what most of these tests want; a public page needs an explicit one.
+     */
+    private function requestOn(string $path): \Laminas\Http\Request
+    {
+        $request = new \Laminas\Http\Request();
+        $request->getUri()->setPath($path);
+
+        return $request;
     }
 
     private function callProtectedMethod(object $object, string $method, array $args = [])
@@ -55,12 +153,30 @@ class ExeLearningRendererTest extends TestCase
         $this->assertTrue($result);
     }
 
-    public function testIsExeLearningFileReturnsTrueForZip(): void
+    public function testIsExeLearningFileReturnsFalseForAPlainZip(): void
     {
+        // .elpx is the only extension eXeLearning owns; claiming .zip took over
+        // a file type belonging to the rest of the installation.
         $media = new MediaRepresentation(
             'http://example.com/file.zip',
             'Test File',
             'content.zip'
+        );
+
+        $result = $this->callProtectedMethod($this->renderer, 'isExeLearningFile', [$media]);
+        $this->assertFalse($result);
+    }
+
+    public function testIsExeLearningFileStillRecognisesAZipThisModuleExtracted(): void
+    {
+        // Packages uploaded as .zip under the old rule carry the module's own
+        // marker, so they keep working instead of going dark on upgrade.
+        $media = new MediaRepresentation(
+            'http://example.com/file.zip',
+            'Legacy Package',
+            'content.zip',
+            1,
+            ['exelearning_extracted_hash' => 'abc123']
         );
 
         $result = $this->callProtectedMethod($this->renderer, 'isExeLearningFile', [$media]);
@@ -225,8 +341,8 @@ class ExeLearningRendererTest extends TestCase
             'elpx lowercase' => ['file.elpx', true],
             'elpx uppercase' => ['FILE.ELPX', true],
             'elpx mixed case' => ['File.ElPx', true],
-            'zip lowercase' => ['file.zip', true],
-            'zip uppercase' => ['FILE.ZIP', true],
+            'zip lowercase' => ['file.zip', false],
+            'zip uppercase' => ['FILE.ZIP', false],
             'pdf' => ['file.pdf', false],
             'doc' => ['file.doc', false],
             'docx' => ['file.docx', false],
@@ -349,6 +465,283 @@ class ExeLearningRendererTest extends TestCase
         $this->assertStringContainsString('<iframe', $result);
         $this->assertStringContainsString('sandbox=', $result);
         $this->assertStringContainsString('Test eXeLearning Content', $result);
+    }
+
+    public function testRenderProducesTheViewerForAnElpxMedia(): void
+    {
+        // The regression this pins: exelearning_renderer was registered only
+        // under file_renderers while its name was written to the media's
+        // `renderer` column, so Omeka never resolved it, substituted a Fallback
+        // renderer and $media->render() returned an empty string. The failure
+        // was silent -- no exception, no log line, no test.
+        $hash = 'da39a3ee5e6b4b0d3255bfef95601890afd80709';
+
+        $elpService = $this->createMock(ElpFileService::class);
+        $elpService->method('getMediaHash')->willReturn($hash);
+        $elpService->method('hasPreview')->willReturn(true);
+
+        $renderer = new ExeLearningRenderer($elpService, $this->createMockRequest());
+
+        $media = new MediaRepresentation(
+            'http://example.com/course.elpx',
+            'Course',
+            'course.elpx',
+            42,
+            ['exelearning_extracted_hash' => $hash, 'exelearning_has_preview' => '1']
+        );
+
+        $result = $renderer->render(new \Laminas\View\Renderer\PhpRenderer(), $media);
+
+        $this->assertNotSame('', $result);
+        $this->assertStringContainsString('exelearning-viewer', $result);
+        $this->assertStringContainsString('/exelearning/content/' . $hash . '/index.html', $result);
+        $this->assertStringNotContainsString('exelearning-fallback', $result);
+    }
+
+    /**
+     * Runs the viewer's inline script in Node with a fake window and checks the
+     * base it derives. Skipped where Node is not installed.
+     *
+     * @dataProvider contentBaseProvider
+     */
+    public function testInlineScriptDerivesContentBaseFromTheEarliestMarker(string $href, string $expected): void
+    {
+        $node = trim((string) shell_exec('command -v node 2>/dev/null'));
+        if ($node === '') {
+            $this->markTestSkipped('Node is not installed.');
+        }
+        $hash = 'da39a3ee5e6b4b0d3255bfef95601890afd80709';
+        $elpService = $this->createMock(ElpFileService::class);
+        $elpService->method('getMediaHash')->willReturn($hash);
+        $elpService->method('hasPreview')->willReturn(true);
+        $renderer = new ExeLearningRenderer($elpService, $this->createMockRequest());
+        $media = new MediaRepresentation(
+            'http://example.com/course.elpx',
+            'Course',
+            'course.elpx',
+            42,
+            ['exelearning_extracted_hash' => $hash, 'exelearning_has_preview' => '1']
+        );
+        $html = $renderer->render(new \Laminas\View\Renderer\PhpRenderer(), $media);
+        $this->assertSame(1, preg_match('#<script>(\(function\(\)\{var h=.*?)</script>#s', $html, $m));
+
+        $js = 'var window={location:{href:' . json_encode($href) . '}};'
+            . 'var document={getElementById:function(){return null;}};'
+            . $m[1] . ';process.stdout.write(window.exelearningContentBase);';
+        $file = tempnam(sys_get_temp_dir(), 'exe-base-') . '.js';
+        file_put_contents($file, $js);
+        try {
+            $out = shell_exec(escapeshellarg($node) . ' ' . escapeshellarg($file));
+        } finally {
+            @unlink($file);
+        }
+        $this->assertSame($expected, $out);
+    }
+
+    public function contentBaseProvider(): array
+    {
+        return [
+            'admin page' => ['https://x.test/omeka/admin/media/42', 'https://x.test/omeka'],
+            'public site' => ['https://x.test/omeka/s/demo/item/5', 'https://x.test/omeka'],
+            'site slug admin' => ['https://x.test/omeka/s/admin/item/5', 'https://x.test/omeka'],
+            'playground prefix' => [
+                'https://x.test/playground/abc/php83/s/admin/media/1',
+                'https://x.test/playground/abc/php83',
+            ],
+        ];
+    }
+
+    public function testRenderScopesItsUrlRewritingToItsOwnViewer(): void
+    {
+        // Several eXeLearning media can appear on one page; each viewer's inline
+        // script must only touch its own elements.
+        $hash = 'da39a3ee5e6b4b0d3255bfef95601890afd80709';
+
+        $elpService = $this->createMock(ElpFileService::class);
+        $elpService->method('getMediaHash')->willReturn($hash);
+        $elpService->method('hasPreview')->willReturn(true);
+
+        $renderer = new ExeLearningRenderer($elpService, $this->createMockRequest());
+
+        $media = new MediaRepresentation(
+            'http://example.com/course.elpx',
+            'Course',
+            'course.elpx',
+            42,
+            ['exelearning_extracted_hash' => $hash, 'exelearning_has_preview' => '1']
+        );
+
+        $result = $renderer->render(new \Laminas\View\Renderer\PhpRenderer(), $media);
+
+        $this->assertStringContainsString('id="exelearning-viewer-42"', $result);
+        $this->assertStringContainsString('getElementById("exelearning-viewer-42")', $result);
+        // Both the iframe and the open-in-new-tab link are resolved by that one
+        // scoped pass, not by a document-wide query.
+        $this->assertStringNotContainsString('document.querySelectorAll', $result);
+        $this->assertStringContainsString('r.querySelectorAll("[data-exe-content-path]")', $result);
+    }
+
+    public function testRenderOffersOpenFullscreenAlongsideTheViewer(): void
+    {
+        $hash = 'da39a3ee5e6b4b0d3255bfef95601890afd80709';
+
+        $elpService = $this->createMock(ElpFileService::class);
+        $elpService->method('getMediaHash')->willReturn($hash);
+        $elpService->method('hasPreview')->willReturn(true);
+
+        $renderer = new ExeLearningRenderer($elpService, $this->createMockRequest());
+
+        $media = new MediaRepresentation(
+            'http://example.com/course.elpx',
+            'Course',
+            'course.elpx',
+            42,
+            ['exelearning_extracted_hash' => $hash, 'exelearning_has_preview' => '1']
+        );
+
+        $result = $renderer->render(new \Laminas\View\Renderer\PhpRenderer(), $media);
+
+        $this->assertStringContainsString('exelearning-open-tab-btn', $result);
+        $this->assertStringContainsString('Open fullscreen', $result);
+        $this->assertStringContainsString('rel="noopener noreferrer"', $result);
+    }
+
+    public function testRenderOmitsTheEditButtonOnAPublicRequest(): void
+    {
+        // Editing is admin-only, and this renderer now also runs on public
+        // pages, site page blocks and search results.
+        $hash = 'da39a3ee5e6b4b0d3255bfef95601890afd80709';
+
+        $elpService = $this->createMock(ElpFileService::class);
+        $elpService->method('getMediaHash')->willReturn($hash);
+        $elpService->method('hasPreview')->willReturn(true);
+
+        $renderer = new ExeLearningRenderer($elpService, $this->requestOn('/s/default/item/42'));
+
+        $view = new \Laminas\View\Renderer\PhpRenderer();
+        $view->identity = (object) ['name' => 'admin'];
+        $view->userIsAllowed = true;
+
+        $media = new MediaRepresentation(
+            'http://example.com/course.elpx',
+            'Course',
+            'course.elpx',
+            42,
+            ['exelearning_extracted_hash' => $hash, 'exelearning_has_preview' => '1']
+        );
+
+        $result = $renderer->render($view, $media);
+
+        $this->assertStringNotContainsString('exelearning-edit-btn', $result);
+    }
+
+    public function testRenderOmitsTheEditButtonForAUserWhoMayNotUpdate(): void
+    {
+        $this->withEditorBundle(function (): void {
+            $renderer = new ExeLearningRenderer(
+                $this->previewingService(),
+                $this->requestOn('/admin/media/42')
+            );
+
+            $view = new \Laminas\View\Renderer\PhpRenderer();
+            $view->identity = (object) ['name' => 'viewer'];
+            // Class-level update is allowed, but not for this media.
+            $view->userIsAllowed = true;
+            $media = $this->elpxMedia();
+            $media->userIsAllowed = false;
+
+            $result = $renderer->render($view, $media);
+
+            $this->assertStringNotContainsString('exelearning-edit-btn', $result);
+        });
+    }
+
+    public function testRenderOmitsTheEditButtonForAnAnonymousVisitor(): void
+    {
+        $this->withEditorBundle(function (): void {
+            $renderer = new ExeLearningRenderer(
+                $this->previewingService(),
+                $this->requestOn('/admin/media/42')
+            );
+
+            $view = new \Laminas\View\Renderer\PhpRenderer();
+            $view->identity = null;
+            $view->userIsAllowed = true;
+
+            $result = $renderer->render($view, $this->elpxMedia());
+
+            $this->assertStringNotContainsString('exelearning-edit-btn', $result);
+        });
+    }
+
+    public function testRenderOffersTheEditButtonToAnAdminWhoMayUpdate(): void
+    {
+        // The admin viewer used to be a second, divergent implementation in
+        // view/exelearning/admin/media-show.phtml. Core's admin media template
+        // calls $media->render() itself, so keeping both showed the viewer
+        // twice; the edit button lives here now and the partial carries only
+        // the modal.
+        $this->withEditorBundle(function (): void {
+            $renderer = new ExeLearningRenderer(
+                $this->previewingService(),
+                $this->requestOn('/admin/media/42')
+            );
+
+            $view = new \Laminas\View\Renderer\PhpRenderer();
+            $view->identity = (object) ['name' => 'admin'];
+            $view->userIsAllowed = true;
+
+            $result = $renderer->render($view, $this->elpxMedia());
+
+            $this->assertStringContainsString('exelearning-edit-btn', $result);
+            $this->assertStringContainsString('ExeLearningEditor.open(42', $result);
+            $this->assertStringContainsString('Edit in eXeLearning', $result);
+        });
+    }
+
+    public function testRenderOmitsTheEditButtonWhenTheEditorUrlCannotBeBuilt(): void
+    {
+        // The admin editor route is only registered under the admin router, so
+        // url() can throw on a request that reached the renderer some other way.
+        // A missing edit button is the right outcome, not a 500.
+        $this->withEditorBundle(function (): void {
+            $renderer = new ExeLearningRenderer(
+                $this->previewingService(),
+                $this->requestOn('/admin/media/42')
+            );
+
+            $view = new class extends \Laminas\View\Renderer\PhpRenderer {
+                public function url(string $route, array $params = [], array $options = []): string
+                {
+                    throw new \RuntimeException('route not found: ' . $route);
+                }
+            };
+            $view->identity = (object) ['name' => 'admin'];
+            $view->userIsAllowed = true;
+
+            $result = $renderer->render($view, $this->elpxMedia());
+
+            $this->assertStringNotContainsString('exelearning-edit-btn', $result);
+            $this->assertStringContainsString('exelearning-viewer', $result);
+        });
+    }
+
+    public function testRenderOmitsTheEditButtonWithoutTheBundledEditor(): void
+    {
+        $this->withoutEditorBundle(function (): void {
+            $renderer = new ExeLearningRenderer(
+                $this->previewingService(),
+                $this->requestOn('/admin/media/42')
+            );
+
+            $view = new \Laminas\View\Renderer\PhpRenderer();
+            $view->identity = (object) ['name' => 'admin'];
+            $view->userIsAllowed = true;
+
+            $result = $renderer->render($view, $this->elpxMedia());
+
+            $this->assertStringNotContainsString('exelearning-edit-btn', $result);
+        });
     }
 
     public function testRenderIncludesSecuritySandbox(): void
@@ -567,65 +960,6 @@ class ExeLearningRendererTest extends TestCase
 
         // Should render fallback
         $this->assertStringContainsString('exelearning-fallback', $result);
-    }
-
-    // =========================================================================
-    // buildContentUrl() tests
-    // =========================================================================
-
-    public function testBuildContentUrlIncludesNonStandardPort(): void
-    {
-        $uri = new class extends \Laminas\Uri\Http {
-            public function getPort(): ?int { return 8080; }
-        };
-        $request = new class($uri) extends \Laminas\Http\Request {
-            private $customUri;
-            public function __construct($uri) { $this->customUri = $uri; }
-            public function getUri(): \Laminas\Uri\Http { return $this->customUri; }
-        };
-
-        $renderer = new ExeLearningRenderer($this->elpService, $request);
-
-        $url = $this->callProtectedMethod($renderer, 'buildContentUrl', ['abc123def456789012345678901234567890abcd']);
-
-        $this->assertStringContainsString(':8080', $url);
-        $this->assertStringContainsString('/exelearning/content/abc123def456789012345678901234567890abcd/index.html', $url);
-    }
-
-    public function testBuildContentUrlStripsPlaygroundPrefixFromUriPath(): void
-    {
-        $uri = new class extends \Laminas\Uri\Http {
-            public function getPath(): string { return '/omeka-s-playground/playground/abc123/php83/admin/media/3'; }
-        };
-        $request = new class($uri) extends \Laminas\Http\Request {
-            private $customUri;
-            public function __construct($uri) { $this->customUri = $uri; }
-            public function getUri(): \Laminas\Uri\Http { return $this->customUri; }
-        };
-
-        $renderer = new ExeLearningRenderer($this->elpService, $request);
-        $url = $this->callProtectedMethod($renderer, 'buildContentUrl', ['abc123def456789012345678901234567890abcd']);
-
-        $this->assertStringContainsString('/omeka-s-playground/playground/abc123/php83/exelearning/content/', $url);
-        $this->assertStringNotContainsString('/admin/', $url);
-    }
-
-    public function testExtractBasePathWithAdminRoute(): void
-    {
-        $basePath = $this->callProtectedMethod($this->renderer, 'extractBasePath', ['/playground/uuid/php83/admin/media/3']);
-        $this->assertSame('/playground/uuid/php83', $basePath);
-    }
-
-    public function testExtractBasePathWithPublicRoute(): void
-    {
-        $basePath = $this->callProtectedMethod($this->renderer, 'extractBasePath', ['/playground/uuid/php83/s/mysite/item/1']);
-        $this->assertSame('/playground/uuid/php83', $basePath);
-    }
-
-    public function testExtractBasePathWithNoKnownMarker(): void
-    {
-        $basePath = $this->callProtectedMethod($this->renderer, 'extractBasePath', ['/some/unknown/path']);
-        $this->assertSame('', $basePath);
     }
 
     // =========================================================================

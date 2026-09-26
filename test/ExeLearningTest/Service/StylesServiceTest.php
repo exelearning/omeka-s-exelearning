@@ -3,7 +3,9 @@ declare(strict_types=1);
 
 namespace ExeLearningTest\Service;
 
+use ExeLearning\Service\ElpFileService;
 use ExeLearning\Service\StylesService;
+use ExeLearning\Service\ZipSafety;
 use Omeka\Settings\Settings;
 use PHPUnit\Framework\TestCase;
 use ZipArchive;
@@ -226,6 +228,70 @@ class StylesServiceTest extends TestCase
      * the offending entry, so an extensionless file must abort the install.
      * This is the guard that silently broke the icons fixture above.
      */
+    public function testInstallWritesDenyAllHtaccessInStorageRoot(): void
+    {
+        $zip = $this->makeZip(['config.xml' => $this->configXml('acme'), 'style.css' => 'a{}']);
+        $this->svc->installFromZip($zip);
+        $this->assertStringEqualsFile(
+            $this->svc->getStorageDir() . '/.htaccess',
+            ElpFileService::DENY_ALL_HTACCESS
+        );
+        @unlink($zip);
+    }
+
+    public function testInstallRefusesWhenStorageCannotBeProtected(): void
+    {
+        $storage = $this->svc->getStorageDir();
+        mkdir($storage, 0555, true);
+        if (is_writable($storage)) {
+            chmod($storage, 0755);
+            $this->markTestSkipped('Permissions are not enforced for this user (e.g. root).');
+        }
+        $zip = $this->makeZip(['config.xml' => $this->configXml('acme'), 'style.css' => 'a{}']);
+        try {
+            $this->svc->installFromZip($zip);
+            $this->fail('install must fail without the deny-all rule');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('.htaccess', $e->getMessage());
+            $this->assertDirectoryDoesNotExist($storage . '/acme');
+        } finally {
+            chmod($storage, 0755);
+            @unlink($zip);
+        }
+    }
+
+    public function testValidateRejectsOversizedConfigXml(): void
+    {
+        $zip = $this->makeZip([
+            'config.xml' => str_repeat(' ', StylesService::MAX_CONFIG_XML_BYTES + 1),
+            'style.css' => 'a{}',
+        ]);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('config.xml is too large.');
+        try {
+            $this->svc->validateZip($zip);
+        } finally {
+            @unlink($zip);
+        }
+    }
+
+    public function testInstallFromZipRejectsPhpSmuggledBehindAllowedExtension(): void
+    {
+        $zip = $this->makeZip([
+            'config.xml' => $this->configXml('sneaky'),
+            'style.css'  => 'a{}',
+            'shell.php.css' => '<?php',
+        ]);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Rejected unsafe archive entry: shell.php.css');
+        try {
+            $this->svc->installFromZip($zip);
+        } finally {
+            @unlink($zip);
+        }
+    }
+
     public function testInstallFromZipRejectsExtensionlessEntry(): void
     {
         $zip = $this->makeZip([
@@ -269,32 +335,33 @@ class StylesServiceTest extends TestCase
         @unlink($zip);
     }
 
-    public function testExtractThemesFromBundleAcceptsBothShapes(): void
+    /**
+     * Lay out a bundled theme like a release build: its config.xml lives under
+     * files/perm/themes/base/ and data/ only ships bundle.json.zst.
+     */
+    private function writeBuiltinTheme(string $dir, ?string $configXml): void
     {
-        $flat = ['themes' => [['name' => 'a']]];
-        $nested = ['themes' => ['themes' => [['name' => 'b']]]];
-        $this->assertCount(1, $this->svc->extractThemesFromBundle($flat));
-        $this->assertCount(1, $this->svc->extractThemesFromBundle($nested));
-        $this->assertSame([], $this->svc->extractThemesFromBundle([]));
-        $this->assertSame([], $this->svc->extractThemesFromBundle(['themes' => 'nope']));
-        // Rows without a name are skipped.
-        $this->assertSame([], $this->svc->extractThemesFromBundle(['themes' => [[], ['title' => 'x']]]));
+        $static = $this->tmpRoot . '/module/dist/static';
+        @mkdir($static . '/data', 0755, true);
+        file_put_contents($static . '/data/bundle.json.zst', "\x28\xb5\x2f\xfd");
+        mkdir($static . '/files/perm/themes/base/' . $dir, 0755, true);
+        if ($configXml !== null) {
+            file_put_contents($static . '/files/perm/themes/base/' . $dir . '/config.xml', $configXml);
+        }
     }
 
-    public function testListBuiltinThemesReadsBundleWhenPresent(): void
+    public function testListBuiltinThemesReadsBundledThemeConfigs(): void
     {
-        $dataDir = $this->tmpRoot . '/module/dist/static/data';
-        mkdir($dataDir, 0755, true);
-        file_put_contents($dataDir . '/bundle.json', json_encode([
-            'themes' => ['themes' => [
-                ['name' => 'base', 'title' => 'Default', 'version' => '2025'],
-                ['name' => 'neo', 'title' => 'Neo'],
-            ]],
-        ]));
+        $this->writeBuiltinTheme('base', '<theme><name>base</name><title>Default</title>'
+            . '<version>2025</version><author>eXeLearning.net</author></theme>');
+        $this->writeBuiltinTheme('neo', '<theme><name>neo</name><title>Neo</title></theme>');
+
         $themes = $this->svc->listBuiltinThemes();
-        $this->assertCount(2, $themes);
-        $this->assertSame('base', $themes[0]['id']);
+
+        $this->assertSame(['base', 'neo'], array_column($themes, 'id'));
         $this->assertSame('Default', $themes[0]['title']);
+        $this->assertSame('2025', $themes[0]['version']);
+        $this->assertSame('eXeLearning.net', $themes[0]['author']);
     }
 
     public function testListBuiltinThemesReturnsEmptyWhenBundleMissing(): void
@@ -302,21 +369,19 @@ class StylesServiceTest extends TestCase
         $this->assertSame([], $this->svc->listBuiltinThemes());
     }
 
-    public function testListBuiltinThemesReturnsEmptyOnMalformedJson(): void
+    public function testListBuiltinThemesSkipsInvalidThemeDirs(): void
     {
-        $dataDir = $this->tmpRoot . '/module/dist/static/data';
-        mkdir($dataDir, 0755, true);
-        file_put_contents($dataDir . '/bundle.json', '{not json');
-        $this->assertSame([], $this->svc->listBuiltinThemes());
+        $this->writeBuiltinTheme('broken', '<theme><title>No name</title></theme>');
+        $this->writeBuiltinTheme('corrupt', 'not xml <<<');
+        $this->writeBuiltinTheme('empty', null);
+        $this->writeBuiltinTheme('zen', '<theme><name>zen</name><title>Zen</title></theme>');
+
+        $this->assertSame(['zen'], array_column($this->svc->listBuiltinThemes(), 'id'));
     }
 
     public function testAllocateUniqueSlugSuffixesAroundBuiltinsAndUploads(): void
     {
-        $dataDir = $this->tmpRoot . '/module/dist/static/data';
-        mkdir($dataDir, 0755, true);
-        file_put_contents($dataDir . '/bundle.json', json_encode([
-            'themes' => ['themes' => [['name' => 'acme']]],
-        ]));
+        $this->writeBuiltinTheme('acme', $this->configXml('acme'));
         // Bound against a built-in name -> suffix -2.
         $slug = $this->svc->allocateUniqueSlug('acme');
         $this->assertSame('acme-2', $slug);
@@ -338,10 +403,10 @@ class StylesServiceTest extends TestCase
     public function testIsUnsafeZipEntryDetectsEveryBadShape(): void
     {
         foreach (['', '\\a', '/absolute', 'http://x', '../x', 'a/../b'] as $bad) {
-            $this->assertTrue(StylesService::isUnsafeZipEntry($bad), "should reject: $bad");
+            $this->assertTrue(ZipSafety::isUnsafeEntry($bad), "should reject: $bad");
         }
         foreach (['style.css', 'icons/a.png', 'sub/dir/file.css'] as $ok) {
-            $this->assertFalse(StylesService::isUnsafeZipEntry($ok), "should accept: $ok");
+            $this->assertFalse(ZipSafety::isUnsafeEntry($ok), "should accept: $ok");
         }
     }
 

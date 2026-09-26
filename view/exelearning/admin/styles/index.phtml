@@ -25,6 +25,9 @@ $toggleBuiltin = $url('admin/exelearning-styles/toggle-builtin');
 $toggleUploaded = $url('admin/exelearning-styles/toggle-uploaded');
 $delete = $url('admin/exelearning-styles/delete');
 $toggleBlockImport = $url('admin/exelearning-styles/toggle-block-import');
+// One token for every small action form; the upload form's Csrf element
+// shares the same session-bound validator name ("csrf").
+$csrfInput = '<input type="hidden" name="csrf" value="' . $escapeAttr($form->get('csrf')->getValue()) . '">';
 $sizeHint = function_exists('size_format') ? size_format($maxZipSize) : ($maxZipSize . ' bytes');
 ?>
 
@@ -34,7 +37,7 @@ $sizeHint = function_exists('size_format') ? size_format($maxZipSize) : ($maxZip
 
 <h3><?= $escape($translate('Import policy')) ?></h3>
 <form method="post" action="<?= $escapeAttr($toggleBlockImport) ?>" style="margin-bottom: 1em;">
-    <?= $this->formCollection(new \Laminas\Form\Form(), false) // inline CSRF via Omeka global layout ?>
+    <?= $csrfInput ?>
     <input type="hidden" name="enabled" value="<?= $blockImport ? '0' : '1' ?>">
     <label>
         <strong><?= $escape($translate('Block user-imported styles')) ?></strong>
@@ -87,6 +90,7 @@ $sizeHint = function_exists('size_format') ? size_format($maxZipSize) : ($maxZip
             <td><?= $escape($style['installed_at'] ?? '') ?></td>
             <td>
                 <form method="post" action="<?= $escapeAttr($toggleUploaded) ?>" style="display:inline;">
+                    <?= $csrfInput ?>
                     <input type="hidden" name="slug" value="<?= $escapeAttr($style['id']) ?>">
                     <input type="hidden" name="enabled" value="<?= empty($style['enabled']) ? '1' : '0' ?>">
                     <button type="submit" class="button">
@@ -97,6 +101,7 @@ $sizeHint = function_exists('size_format') ? size_format($maxZipSize) : ($maxZip
             <td>
                 <form method="post" action="<?= $escapeAttr($delete) ?>" style="display:inline;"
                       onsubmit="return confirm('<?= $escape($translate('Delete this style? This cannot be undone.')) ?>');">
+                    <?= $csrfInput ?>
                     <input type="hidden" name="slug" value="<?= $escapeAttr($style['id']) ?>">
                     <button type="submit" class="button red"><?= $escape($translate('Delete')) ?></button>
                 </form>
@@ -132,6 +137,7 @@ $sizeHint = function_exists('size_format') ? size_format($maxZipSize) : ($maxZip
             <td><?= $escape($style['version']) ?></td>
             <td>
                 <form method="post" action="<?= $escapeAttr($toggleBuiltin) ?>" style="display:inline;">
+                    <?= $csrfInput ?>
                     <input type="hidden" name="id" value="<?= $escapeAttr($style['id']) ?>">
                     <input type="hidden" name="enabled" value="<?= $isDisabled ? '1' : '0' ?>">
                     <button type="submit" class="button">

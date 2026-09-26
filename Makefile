@@ -110,7 +110,8 @@ build-editor: check-bun fetch-editor-source
 	fi; \
 	echo "Editor version input: $${APP_VER:-(default -> alpha)}"; \
 	cd $(EDITOR_SUBMODULE_PATH) && bun install && OUTPUT_DIR=$(EDITOR_OUTPUT_DIR) APP_VERSION="$$APP_VER" bun run build:static
-	@# Create symlink for Omeka asset serving
+	@# Local-only convenience so Omeka can serve the editor from asset/.
+	@# Do not ship this symlink: zip follows it and would duplicate dist/static/.
 	@rm -f asset/static
 	@ln -s ../dist/static asset/static
 	@echo ""
@@ -253,6 +254,14 @@ package:
 		echo "Error: VERSION not specified. Use 'make package VERSION=1.2.3'"; \
 		exit 1; \
 	fi
+	@# Omeka S orders module versions with Composer's semver parser, which only
+	@# accepts alpha/beta/rc pre-release labels; a label it cannot parse (such as
+	@# "prerelease" or "hotfix") throws on every admin request. Refuse it here,
+	@# before anything is written. See ADR-40-01.
+	@if ! echo "$(VERSION)" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.?[0-9]+)?$$'; then \
+		echo "Error: VERSION '$(VERSION)' must be X.Y.Z or X.Y.Z-(alpha|beta|rc).N (Omeka S cannot parse other labels, see ADR-40-01)." >&2; \
+		exit 1; \
+	fi
 	@# The embedded editor is a release artifact (ADR-28-01): never produce a
 	@# package without a valid bundled editor.
 	@if [ ! -r dist/static/index.html ]; then \
@@ -273,10 +282,20 @@ package:
 	rm -rf /tmp/exelearning-omeka-package
 	mkdir -p /tmp/exelearning-omeka-package/ExeLearning
 	rsync -av --exclude-from=.distignore ./ /tmp/exelearning-omeka-package/ExeLearning/
+	@# zip adds to an existing archive, so a stale ExeLearning-VERSION.zip would
+	@# keep files that a new .distignore rule excludes (including a duplicated
+	@# editor under asset/static/).
+	rm -f "$(CURDIR)/ExeLearning-$(VERSION).zip"
 	cd /tmp/exelearning-omeka-package && zip -qr "$(CURDIR)/ExeLearning-$(VERSION).zip" ExeLearning
 	rm -rf /tmp/exelearning-omeka-package
 	@echo "Restoring version to 0.0.0 in module.ini..."
 	$(SED_INPLACE) 's/^\([[:space:]]*version[[:space:]]*=[[:space:]]*\).*$$/\1"0.0.0"/' config/module.ini
+	@python3 -c 'import sys, zipfile; z = zipfile.ZipFile(sys.argv[1]); sys.exit(1 if any(n.startswith("ExeLearning/asset/static") for n in z.namelist()) else 0)' \
+		"$(CURDIR)/ExeLearning-$(VERSION).zip" || { \
+		echo "Error: release ZIP contains asset/static/; zip followed the symlink to dist/static/ and would ship the editor twice. Keep /asset/static in .distignore." >&2; \
+		rm -f "$(CURDIR)/ExeLearning-$(VERSION).zip"; \
+		exit 1; \
+	}
 	@echo "Package created: ExeLearning-$(VERSION).zip"
 
 # ============================================================================
@@ -286,6 +305,7 @@ package:
 generate-pot:
 	@echo "Extracting strings using xgettext..."
 	find . -path ./vendor -prune -o -path ./exelearning -prune -o -path ./dist -prune -o \
+		-path ./test -prune -o -path ./node_modules -prune -o -path ./analysis -prune -o -path ./legacy -prune -o \
 		\( -name '*.php' -o -name '*.phtml' \) -print \
 	| xargs xgettext \
 	    --language=PHP \
@@ -321,10 +341,16 @@ check-untranslated:
 		else \
 			echo "  All strings translated!"; \
 		fi; \
+		FUZZY=$$(msgattrib --only-fuzzy "$$po" 2>/dev/null | grep -c "^#, fuzzy" || true); \
+		if [ "$$FUZZY" -gt 0 ]; then \
+			echo "  Warning: $$FUZZY fuzzy string(s) (msgmerge guesses, ignored at runtime):"; \
+			msgattrib --only-fuzzy "$$po" 2>/dev/null | grep -A1 "^#, fuzzy" | grep "^msgid" | head -10; \
+			FOUND_UNTRANSLATED=1; \
+		fi; \
 	done; \
 	if [ "$$FOUND_UNTRANSLATED" -eq 1 ]; then \
 		echo ""; \
-		echo "Error: Untranslated strings found. Run 'make update-po' and translate."; \
+		echo "Error: Untranslated or fuzzy strings found. Run 'make update-po', translate, and clear #, fuzzy."; \
 		exit 1; \
 	fi
 

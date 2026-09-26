@@ -25,47 +25,7 @@ class ApiController extends AbstractActionController
         $this->elpService = $elpService;
     }
 
-    /**
-     * Build an absolute content proxy URL for the given hash.
-     *
-     * Derives the base path from the actual request URI path so that the
-     * playground prefix (/playground/{uuid}/php83/) is correctly included
-     * even in PHP-WASM environments where getBasePath() is unreliable.
-     */
-    protected function buildContentUrl(string $hash): string
-    {
-        $request = $this->getRequest();
-        $uri = $request->getUri();
-        $scheme = $uri->getScheme();
-        $port = $uri->getPort();
-        $serverUrl = $scheme . '://' . $uri->getHost();
-        if ($port && !(($scheme === 'http' && $port == 80) || ($scheme === 'https' && $port == 443))) {
-            $serverUrl .= ':' . $port;
-        }
-        $basePath = $this->extractBasePath($uri->getPath());
-        return $serverUrl . $basePath . '/exelearning/content/' . $hash . '/index.html';
-    }
 
-    /**
-     * Derive the Omeka base path from the actual request URI path.
-     *
-     * Strips everything from the first known Omeka route segment onward.
-     * Reliable in PHP-WASM where the full URL path is preserved in the URI.
-     */
-    protected function extractBasePath(string $uriPath): string
-    {
-        // Strip from the marker that appears EARLIEST in the path, not the
-        // first one in this list — otherwise a path like
-        // `/sub/s/site/admin/...` would be cut at `/admin/` and keep too much.
-        $earliest = null;
-        foreach (['/admin/', '/s/', '/api/'] as $marker) {
-            $pos = strpos($uriPath, $marker);
-            if ($pos !== false && ($earliest === null || $pos < $earliest)) {
-                $earliest = $pos;
-            }
-        }
-        return $earliest === null ? '' : substr($uriPath, 0, $earliest);
-    }
 
     /**
      * Create a JSON error response with status code.
@@ -140,9 +100,8 @@ class ApiController extends AbstractActionController
             return $this->errorResponse(404, 'Media not found');
         }
 
-        // Check permissions
-        $acl = $this->getEvent()->getApplication()->getServiceManager()->get('Omeka\Acl');
-        if (!$acl->userIsAllowed('Omeka\Entity\Media', 'update')) {
+        // Per-media check: authors may only edit media they own.
+        if (!$media->userIsAllowed('update')) {
             return $this->errorResponse(403, 'Forbidden');
         }
 
@@ -151,6 +110,9 @@ class ApiController extends AbstractActionController
         $contentType = $request->getHeaders()->get('Content-Type');
         $contentTypeValue = $contentType ? $contentType->getFieldValue() : '';
         $tmpFile = null;
+        // Only the raw-body branch creates its own temp file; PHP removes
+        // multipart uploads itself at the end of the request.
+        $ownsTmpFile = false;
 
         if (stripos($contentTypeValue, 'application/octet-stream') !== false
             || stripos($contentTypeValue, 'application/zip') !== false) {
@@ -159,6 +121,10 @@ class ApiController extends AbstractActionController
                 return $this->errorResponse(400, 'Empty request body');
             }
             $tmpFile = tempnam(sys_get_temp_dir(), 'exelearning-save-');
+            if ($tmpFile === false) {
+                return $this->errorResponse(500, 'Failed to write request body to temp file');
+            }
+            $ownsTmpFile = true;
             if (file_put_contents($tmpFile, $body) === false) {
                 @unlink($tmpFile);
                 return $this->errorResponse(500, 'Failed to write request body to temp file');
@@ -194,7 +160,13 @@ class ApiController extends AbstractActionController
                 'contentPath' => $contentPath,
             ]);
         } catch (\Exception $e) {
-            return $this->errorResponse(500, 'Save failed: ' . $e->getMessage());
+            // Service messages can carry server paths; keep them in the log.
+            error_log(sprintf('[ExeLearning] save failed for media %d: %s', (int) $mediaId, $e->getMessage()));
+            return $this->errorResponse(500, 'Save failed. Check the server log for details.');
+        } finally {
+            if ($ownsTmpFile) {
+                @unlink($tmpFile);
+            }
         }
     }
 
@@ -273,8 +245,8 @@ class ApiController extends AbstractActionController
             return $this->errorResponse(404, 'Media not found');
         }
 
-        $acl = $this->getEvent()->getApplication()->getServiceManager()->get('Omeka\Acl');
-        if (!$acl->userIsAllowed('Omeka\Entity\Media', 'update')) {
+        // Per-media check: authors may only edit media they own.
+        if (!$media->userIsAllowed('update')) {
             return $this->errorResponse(403, 'Forbidden');
         }
 
@@ -289,7 +261,8 @@ class ApiController extends AbstractActionController
                 'teacherModeVisible' => $visible,
             ]);
         } catch (\Exception $e) {
-            return $this->errorResponse(500, 'Update failed: ' . $e->getMessage());
+            error_log(sprintf('[ExeLearning] teacher-mode update failed for media %d: %s', (int) $mediaId, $e->getMessage()));
+            return $this->errorResponse(500, 'Update failed. Check the server log for details.');
         }
     }
 }

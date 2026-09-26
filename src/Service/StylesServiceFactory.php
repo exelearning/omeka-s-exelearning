@@ -9,8 +9,8 @@ use Laminas\ServiceManager\Factory\FactoryInterface;
 /**
  * Factory for {@see StylesService}.
  *
- * Resolves Omeka's files directory the same way ElpFileServiceFactory does,
- * so uploaded styles end up in a sibling of the ELP extraction dir.
+ * Uses the shared {@see FilesPath} resolver, so uploaded styles end up in a
+ * sibling of the ELP extraction dir.
  */
 class StylesServiceFactory implements FactoryInterface
 {
@@ -19,30 +19,7 @@ class StylesServiceFactory implements FactoryInterface
         $settings = $services->get('Omeka\Settings');
         $logger = $services->get('Omeka\Logger');
 
-        $filesPath = null;
-        try {
-            $config = $services->get('Config');
-            $filesPath = $config['file_store']['local']['base_path'] ?? null;
-        } catch (\Throwable $e) {
-            // ignore.
-        }
-        if (!$filesPath) {
-            try {
-                $fileStore = $services->get('Omeka\File\Store');
-                if (method_exists($fileStore, 'getLocalPath')) {
-                    $filesPath = dirname($fileStore->getLocalPath(''));
-                }
-            } catch (\Throwable $e) {
-                // ignore.
-            }
-        }
-        if (!$filesPath) {
-            $filesPath = defined('OMEKA_PATH') ? OMEKA_PATH . '/files' : '/var/www/html/files';
-        }
-        $volumePath = '/var/www/html/volume/files';
-        if (is_dir($volumePath)) {
-            $filesPath = $volumePath;
-        }
+        $filesPath = FilesPath::resolve($services);
 
         $modulePath = dirname(__DIR__, 2);
         return new StylesService($settings, $filesPath, $modulePath, $logger);

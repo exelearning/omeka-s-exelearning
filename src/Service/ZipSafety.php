@@ -6,7 +6,7 @@ namespace ExeLearning\Service;
 use ZipArchive;
 
 /**
- * Safe ZIP extraction shared by the .elpx and static-editor pipelines.
+ * Safe ZIP extraction shared by the .elpx and style-package pipelines.
  *
  * Replaces blind ZipArchive::extractTo() — which is not a guaranteed security
  * boundary across libzip builds — with an entry-by-entry extractor that:
@@ -91,7 +91,8 @@ final class ZipSafety
 
         // PHP-capable extensions are dangerous in any position of the name.
         $phpFamily = [
-            'php', 'php3', 'php4', 'php5', 'php7', 'php8', 'phtml', 'phar', 'shtml',
+            'php', 'php3', 'php4', 'php5', 'php7', 'php8', 'pht', 'phtm', 'phtml', 'phps', 'phpt',
+            'phar', 'shtml',
         ];
         foreach (explode('.', $stripped) as $part) {
             if (in_array(trim($part), $phpFamily, true)) {
@@ -124,14 +125,15 @@ final class ZipSafety
         string $zipPath,
         string $destDir,
         int $maxFiles = self::DEFAULT_MAX_FILES,
-        int $maxTotalBytes = self::DEFAULT_MAX_TOTAL_BYTES
+        int $maxTotalBytes = self::DEFAULT_MAX_TOTAL_BYTES,
+        string $stripPrefix = ''
     ): void {
         $zip = new ZipArchive();
         if ($zip->open($zipPath) !== true) {
             throw new \RuntimeException('Could not open the archive for extraction.');
         }
         try {
-            self::extract($zip, $destDir, $maxFiles, $maxTotalBytes);
+            self::extract($zip, $destDir, $maxFiles, $maxTotalBytes, $stripPrefix);
         } finally {
             $zip->close();
         }
@@ -140,13 +142,17 @@ final class ZipSafety
     /**
      * Extract an already-open archive safely into $destDir.
      *
+     * With $stripPrefix (e.g. "theme/"), only entries under that folder are
+     * written, relative to it; every entry is still validated.
+     *
      * @throws \RuntimeException
      */
     public static function extract(
         ZipArchive $zip,
         string $destDir,
         int $maxFiles = self::DEFAULT_MAX_FILES,
-        int $maxTotalBytes = self::DEFAULT_MAX_TOTAL_BYTES
+        int $maxTotalBytes = self::DEFAULT_MAX_TOTAL_BYTES,
+        string $stripPrefix = ''
     ): void {
         if ($zip->numFiles > $maxFiles) {
             throw new \RuntimeException('Archive contains too many entries.');
@@ -188,7 +194,14 @@ final class ZipSafety
                 continue;
             }
             $name = (string) $stat['name'];
-            $target = $destReal . '/' . ltrim(str_replace('\\', '/', $name), '/');
+            $relative = $name;
+            if ($stripPrefix !== '') {
+                if (strpos($name, $stripPrefix) !== 0 || $name === $stripPrefix) {
+                    continue;
+                }
+                $relative = substr($name, strlen($stripPrefix));
+            }
+            $target = $destReal . '/' . ltrim(str_replace('\\', '/', $relative), '/');
 
             if (substr($name, -1) === '/') {
                 self::ensureDir($target);

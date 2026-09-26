@@ -385,7 +385,10 @@ class EditorControllerTest extends TestCase
         $this->controller->setIdentity($identity);
         $this->controller->setRouteParams(['id' => '123']);
         $this->controller->addMedia(123, $media);
-        $this->controller->setUserAllowed(false);
+        // Class-level update is allowed, but not for this media (e.g. an
+        // author editing someone else's package).
+        $this->controller->setUserAllowed(true);
+        $media->userIsAllowed = false;
 
         $result = $this->controller->editAction();
 
@@ -445,9 +448,7 @@ class EditorControllerTest extends TestCase
                     public function getScheme(): string { return 'https'; }
                     public function getHost(): string { return 'example.com'; }
                     public function getPort(): ?int { return null; }
-                    // resolveBasePath() derives the install sub-path from the URI
-                    // before falling back to getBasePath().
-                    public function getPath(): string { return '/omeka-s/admin/exelearning/edit/123'; }
+                    public function getPath(): string { return '/omeka-s/admin/exelearning/editor/edit/123'; }
                 };
             }
             public function getBasePath(): string { return '/omeka-s'; }
@@ -490,9 +491,7 @@ class EditorControllerTest extends TestCase
                     public function getScheme(): string { return 'https'; }
                     public function getHost(): string { return 'example.com'; }
                     public function getPort(): ?int { return 443; }
-                    // Root install: no sub-path to derive, so resolveBasePath()
-                    // falls through to the empty getBasePath() below.
-                    public function getPath(): string { return '/admin/exelearning/edit/123'; }
+                    public function getPath(): string { return '/admin/exelearning/editor/edit/123'; }
                 };
             }
             public function getBasePath(): string { return ''; }
@@ -533,9 +532,7 @@ class EditorControllerTest extends TestCase
                     public function getScheme(): string { return 'http'; }
                     public function getHost(): string { return 'localhost'; }
                     public function getPort(): ?int { return 8080; }
-                    // resolveBasePath() derives the install sub-path from the URI
-                    // before falling back to getBasePath().
-                    public function getPath(): string { return '/omeka-s/admin/exelearning/edit/123'; }
+                    public function getPath(): string { return '/omeka-s/admin/exelearning/editor/edit/123'; }
                 };
             }
             public function getBasePath(): string { return '/omeka-s'; }
@@ -580,9 +577,7 @@ class EditorControllerTest extends TestCase
                     public function getScheme(): string { return 'https'; }
                     public function getHost(): string { return 'example.com'; }
                     public function getPort(): ?int { return null; }
-                    // resolveBasePath() derives the install sub-path from the URI
-                    // before falling back to getBasePath().
-                    public function getPath(): string { return '/omeka-s/admin/exelearning/edit/123'; }
+                    public function getPath(): string { return '/admin/exelearning/editor/edit/123'; }
                 };
             }
             public function getBasePath(): string { return ''; }

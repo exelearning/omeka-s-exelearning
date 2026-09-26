@@ -400,7 +400,10 @@ class ApiControllerTest extends TestCase
         $this->controller->setIdentity($identity);
         $this->controller->setRouteParams(['id' => '123']);
         $this->controller->addMedia(123, $media);
-        $this->controller->setUserAllowed(false);
+        // Class-level update is allowed, but not for this media (e.g. an
+        // author editing someone else's package).
+        $this->controller->setUserAllowed(true);
+        $media->userIsAllowed = false;
 
         $result = $this->controller->saveAction();
 
@@ -627,7 +630,67 @@ class ApiControllerTest extends TestCase
         $this->assertInstanceOf(JsonModel::class, $result);
         $this->assertEquals(500, $this->controller->getResponse()->getStatusCode());
         $this->assertStringContainsString('Save failed', $result->getVariables()['message']);
-        $this->assertStringContainsString('Disk full', $result->getVariables()['message']);
+        $this->assertStringNotContainsString('Disk full', $result->getVariables()['message']);
+    }
+
+    /**
+     * @dataProvider replaceFileOutcomes
+     */
+    public function testSaveActionRemovesRawBodyTempFile(bool $replaceThrows): void
+    {
+        $request = new class {
+            public function isPost(): bool { return true; }
+            public function getPost($key = null) { return null; }
+            public function getContent(): string { return 'PK-raw-body'; }
+            public function getHeaders() {
+                return new class {
+                    public function get($name) {
+                        if ($name !== 'Content-Type') {
+                            return null;
+                        }
+                        return new class {
+                            public function getFieldValue(): string { return 'application/octet-stream'; }
+                        };
+                    }
+                };
+            }
+        };
+
+        $media = new \Omeka\Api\Representation\MediaRepresentation(
+            'http://example.com/files/original/test.elpx',
+            'Test ELP',
+            'test.elpx',
+            123
+        );
+
+        $seenPath = null;
+        $this->elpService->method('replaceFile')
+            ->willReturnCallback(function ($media, string $path) use (&$seenPath, $replaceThrows) {
+                $seenPath = $path;
+                $this->assertFileExists($path);
+                if ($replaceThrows) {
+                    throw new \Exception('Invalid eXeLearning file');
+                }
+                return ['hasPreview' => false, 'hash' => null];
+            });
+
+        $this->controller->setRequest($request);
+        $this->controller->setIdentity(new class {
+            public function getId(): int { return 1; }
+        });
+        $this->controller->setRouteParams(['id' => '123']);
+        $this->controller->addMedia(123, $media);
+        $this->controller->setUserAllowed(true);
+
+        $this->controller->saveAction();
+
+        $this->assertNotNull($seenPath);
+        $this->assertFileDoesNotExist($seenPath);
+    }
+
+    public function replaceFileOutcomes(): array
+    {
+        return ['success' => [false], 'failure' => [true]];
     }
 
     // =========================================================================
@@ -845,7 +908,10 @@ class ApiControllerTest extends TestCase
         $this->controller->setIdentity($identity);
         $this->controller->setRouteParams(['id' => '123']);
         $this->controller->addMedia(123, $media);
-        $this->controller->setUserAllowed(false);
+        // Class-level update is allowed, but not for this media (e.g. an
+        // author editing someone else's package).
+        $this->controller->setUserAllowed(true);
+        $media->userIsAllowed = false;
 
         $result = $this->controller->setTeacherModeAction();
 
@@ -975,6 +1041,7 @@ class ApiControllerTest extends TestCase
         $this->assertInstanceOf(JsonModel::class, $result);
         $this->assertEquals(500, $this->controller->getResponse()->getStatusCode());
         $this->assertStringContainsString('Update failed', $result->getVariables()['message']);
+        $this->assertStringNotContainsString('Database error', $result->getVariables()['message']);
     }
 
     public function testSetTeacherModeActionWithFalseString(): void
@@ -1055,74 +1122,6 @@ class ApiControllerTest extends TestCase
 
         $this->assertTrue($result->getVariables()['success']);
         $this->assertFalse($result->getVariables()['teacherModeVisible']);
-    }
-
-    // =========================================================================
-    // buildContentUrl() tests
-    // =========================================================================
-
-    public function testBuildContentUrlIncludesNonStandardPort(): void
-    {
-        $uri = new class extends \Laminas\Uri\Http {
-            public function getPort(): ?int { return 8080; }
-        };
-        $request = new class($uri) extends \Laminas\Http\Request {
-            private $customUri;
-            public function __construct($uri) { $this->customUri = $uri; }
-            public function getUri(): \Laminas\Uri\Http { return $this->customUri; }
-        };
-
-        $this->controller->setRequest($request);
-
-        $url = $this->callProtectedMethod($this->controller, 'buildContentUrl', ['abc123def456789012345678901234567890abcd']);
-
-        $this->assertStringContainsString(':8080', $url);
-        $this->assertStringContainsString('/exelearning/content/abc123def456789012345678901234567890abcd/index.html', $url);
-    }
-
-    public function testBuildContentUrlStripsPlaygroundPrefixFromUriPath(): void
-    {
-        $uri = new class extends \Laminas\Uri\Http {
-            public function getPath(): string { return '/omeka-s-playground/playground/abc123/php83/admin/media/3'; }
-        };
-        $request = new class($uri) extends \Laminas\Http\Request {
-            private $customUri;
-            public function __construct($uri) { $this->customUri = $uri; }
-            public function getUri(): \Laminas\Uri\Http { return $this->customUri; }
-        };
-
-        $this->controller->setRequest($request);
-
-        $url = $this->callProtectedMethod($this->controller, 'buildContentUrl', ['abc123def456789012345678901234567890abcd']);
-
-        $this->assertStringContainsString('/omeka-s-playground/playground/abc123/php83/exelearning/content/', $url);
-        $this->assertStringNotContainsString('/admin/', $url);
-    }
-
-    public function testExtractBasePathWithAdminRoute(): void
-    {
-        $basePath = $this->callProtectedMethod($this->controller, 'extractBasePath', ['/playground/uuid/php83/admin/media/3']);
-        $this->assertSame('/playground/uuid/php83', $basePath);
-    }
-
-    public function testExtractBasePathWithApiRoute(): void
-    {
-        $basePath = $this->callProtectedMethod($this->controller, 'extractBasePath', ['/playground/uuid/php83/api/exelearning/save/1']);
-        $this->assertSame('/playground/uuid/php83', $basePath);
-    }
-
-    public function testExtractBasePathWithNoKnownMarker(): void
-    {
-        $basePath = $this->callProtectedMethod($this->controller, 'extractBasePath', ['/some/unknown/path']);
-        $this->assertSame('', $basePath);
-    }
-
-    public function testExtractBasePathPicksEarliestMarkerNotListOrder(): void
-    {
-        // /api/ (3rd in the list) appears before /admin/ (1st in the list);
-        // the earliest-by-position marker must win.
-        $basePath = $this->callProtectedMethod($this->controller, 'extractBasePath', ['/x/api/y/admin/z/']);
-        $this->assertSame('/x', $basePath);
     }
 
     // =========================================================================
@@ -1240,10 +1239,10 @@ class ApiControllerTest extends TestCase
         ));
     }
 
-    public function testValidateCsrfReadsQueryToken(): void
+    public function testValidateCsrfIgnoresQueryToken(): void
     {
         $controller = $this->controllerWithCsrfOutcome(true);
-        $this->assertTrue($this->callProtectedMethod(
+        $this->assertFalse($this->callProtectedMethod(
             $controller,
             'validateCsrf',
             [$this->csrfRequest(null, null, 'tok')]
