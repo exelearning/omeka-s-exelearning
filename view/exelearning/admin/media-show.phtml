@@ -13,7 +13,7 @@
  * @var string|null $processingError Why the last extraction attempt failed.
  */
 
-$canEdit = $this->identity() && $this->userIsAllowed('Omeka\Entity\Media', 'update');
+$canEdit = $this->identity() && $media->userIsAllowed('update');
 $editorInstalled = \ExeLearning\Service\EditorBundle::isAvailable();
 
 if ($canEdit && $editorInstalled) {

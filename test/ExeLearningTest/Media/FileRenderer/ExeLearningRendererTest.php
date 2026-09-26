@@ -548,9 +548,12 @@ class ExeLearningRendererTest extends TestCase
 
             $view = new \Laminas\View\Renderer\PhpRenderer();
             $view->identity = (object) ['name' => 'viewer'];
-            $view->userIsAllowed = false;
+            // Class-level update is allowed, but not for this media.
+            $view->userIsAllowed = true;
+            $media = $this->elpxMedia();
+            $media->userIsAllowed = false;
 
-            $result = $renderer->render($view, $this->elpxMedia());
+            $result = $renderer->render($view, $media);
 
             $this->assertStringNotContainsString('exelearning-edit-btn', $result);
         });

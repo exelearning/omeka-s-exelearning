@@ -385,7 +385,10 @@ class EditorControllerTest extends TestCase
         $this->controller->setIdentity($identity);
         $this->controller->setRouteParams(['id' => '123']);
         $this->controller->addMedia(123, $media);
-        $this->controller->setUserAllowed(false);
+        // Class-level update is allowed, but not for this media (e.g. an
+        // author editing someone else's package).
+        $this->controller->setUserAllowed(true);
+        $media->userIsAllowed = false;
 
         $result = $this->controller->editAction();
 

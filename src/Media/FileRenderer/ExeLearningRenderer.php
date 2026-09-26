@@ -200,7 +200,7 @@ class ExeLearningRenderer implements FileRendererInterface, MediaRendererInterfa
         }
 
         try {
-            if (!$view->identity() || !$view->userIsAllowed('Omeka\\Entity\\Media', 'update')) {
+            if (!$view->identity() || !$media->userIsAllowed('update')) {
                 return '';
             }
             $editUrl = $view->url('admin/exelearning-editor', ['action' => 'edit', 'id' => $media->id()]);
