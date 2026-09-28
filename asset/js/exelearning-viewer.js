@@ -73,11 +73,9 @@
             document.mozFullScreenElement ||
             document.msFullscreenElement);
 
+        // The stylesheet swaps the expand icon for a compress one.
         document.querySelectorAll('.exelearning-fullscreen-btn').forEach(function(button) {
-            var icon = button.querySelector('.icon-fullscreen');
-            if (icon) {
-                icon.className = isFullscreen ? 'icon-fullscreen-exit' : 'icon-fullscreen';
-            }
+            button.classList.toggle('is-fullscreen', isFullscreen);
         });
     }
 

@@ -558,7 +558,9 @@ class ExeLearningRendererTest extends TestCase
         $result = $renderer->render(new \Laminas\View\Renderer\PhpRenderer(), $media);
 
         $this->assertStringContainsString('exelearning-open-tab-btn', $result);
-        $this->assertStringContainsString('Open fullscreen', $result);
+        $this->assertStringContainsString('Open in new window', $result);
+        $this->assertStringContainsString('o-icon-external', $result);
+        $this->assertStringContainsString('target="_blank"', $result);
         $this->assertStringContainsString('rel="noopener noreferrer"', $result);
     }
 
@@ -733,6 +735,17 @@ class ExeLearningRendererTest extends TestCase
                 strpos($result, 'exelearning-edit-btn')
             );
         });
+    }
+
+    public function testRenderLoadsOmekasIconFontForTheToolbarIcons(): void
+    {
+        $renderer = new ExeLearningRenderer($this->previewingService(), $this->requestOn('/s/default/item/42'));
+        $view = new \Laminas\View\Renderer\PhpRenderer();
+
+        $result = $renderer->render($view, $this->elpxMedia());
+
+        $this->assertContains('/modules/Omeka/css/iconfonts.css', $view->headLink()->stylesheets);
+        $this->assertStringContainsString('o-icon-exelearning-fullscreen', $result);
     }
 
     public function testRenderOmitsTheEditButtonForAUserWhoMayNotUpdate(): void

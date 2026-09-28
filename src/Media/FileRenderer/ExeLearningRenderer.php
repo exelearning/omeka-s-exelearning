@@ -76,7 +76,10 @@ class ExeLearningRenderer implements FileRendererInterface, MediaRendererInterfa
         // playground SW scope prefix is always included (PHP cannot see it).
         $contentPath = $this->buildContentPath($hash, $media);
 
-        // Load assets
+        // Load assets. The toolbar icons come from Omeka's own icon font, which
+        // the admin and core themes already load; appending it again is a no-op
+        // there (headLink drops duplicates) and covers themes that do not.
+        $view->headLink()->appendStylesheet($view->assetUrl('css/iconfonts.css', 'Omeka'));
         $view->headLink()->appendStylesheet(
             $view->assetUrl('css/exelearning.css', 'ExeLearning')
         );
@@ -111,20 +114,20 @@ class ExeLearningRenderer implements FileRendererInterface, MediaRendererInterfa
             $html .= DownloadFormats::renderSplitButton($view, $media, $downloadFormatIds, $variant);
         }
 
-        // Open in a new tab. href is filled in by the inline script below,
+        // Open in a new window. href is filled in by the inline script below,
         // for the same base-path reason as the iframe src.
         $html .= '<a class="button exelearning-open-tab-btn" ';
         $html .= 'data-exe-content-path="' . $view->escapeHtmlAttr($contentPath) . '" ';
         $html .= 'target="_blank" rel="noopener noreferrer">';
-        $html .= '<span class="icon-external" aria-hidden="true"></span> ';
-        $html .= $view->translate('Open fullscreen');
+        $html .= '<span class="o-icon-external" aria-hidden="true"></span>';
+        $html .= '<span>' . $view->escapeHtml($view->translate('Open in new window')) . '</span>';
         $html .= '</a>';
 
         // Fullscreen button
         $html .= '<button type="button" class="button exelearning-fullscreen-btn" ';
         $html .= 'data-target="' . $iframeId . '">';
-        $html .= '<span class="icon-fullscreen"></span> ';
-        $html .= $view->translate('Fullscreen');
+        $html .= '<span class="o-icon-exelearning-fullscreen" aria-hidden="true"></span>';
+        $html .= '<span>' . $view->escapeHtml($view->translate('Fullscreen')) . '</span>';
         $html .= '</button>';
 
         // Offered to a user EditPermission allows, and only when the editor
@@ -223,8 +226,8 @@ class ExeLearningRenderer implements FileRendererInterface, MediaRendererInterfa
         $html = '<button type="button" class="button exelearning-edit-btn" ';
         $html .= 'onclick="ExeLearningEditor.open(' . (int) $media->id();
         $html .= ", '" . $view->escapeJs($editUrl) . "')\">";
-        $html .= '<span class="o-icon-edit" aria-hidden="true"></span> ';
-        $html .= $view->translate('Edit in eXeLearning');
+        $html .= '<span class="o-icon-edit" aria-hidden="true"></span>';
+        $html .= '<span>' . $view->escapeHtml($view->translate('Edit in eXeLearning')) . '</span>';
         $html .= '</button>';
         $html .= '<script>window.exelearningEditorI18n=' . $this->editorI18n($view) . ';</script>';
 
@@ -255,6 +258,7 @@ class ExeLearningRenderer implements FileRendererInterface, MediaRendererInterfa
      */
     protected function renderFallback(PhpRenderer $view, MediaRepresentation $media): string
     {
+        $view->headLink()->appendStylesheet($view->assetUrl('css/iconfonts.css', 'Omeka'));
         $view->headLink()->appendStylesheet(
             $view->assetUrl('css/exelearning.css', 'ExeLearning')
         );
@@ -267,7 +271,7 @@ class ExeLearningRenderer implements FileRendererInterface, MediaRendererInterfa
         $html .= '<p class="exelearning-filename">' . $view->escapeHtml($fileName) . '</p>';
         $html .= '<a href="' . $view->escapeHtmlAttr($fileUrl) . '" ';
         $html .= 'class="button exelearning-download-btn" download>';
-        $html .= '<span class="icon-download"></span> ';
+        $html .= '<span class="o-icon-exelearning-download" aria-hidden="true"></span> ';
         $html .= $view->translate('Download eXeLearning file');
         $html .= '</a>';
         $html .= '</div>';
