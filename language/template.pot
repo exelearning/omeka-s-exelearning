@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-26 10:54+0100\n"
+"POT-Creation-Date: 2026-09-28 10:15+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -31,73 +31,42 @@ msgid ""
 "eXeLearning content."
 msgstr ""
 
-#: Module.php:835
+#: Module.php:836
 msgid "Styles"
 msgstr ""
 
-#: Module.php:837
+#: Module.php:838
 msgid "Style management"
 msgstr ""
 
-#: Module.php:840
+#: Module.php:841
 msgid "Open styles page"
 msgstr ""
 
-#: Module.php:844
+#: Module.php:845
 msgid ""
 "Upload eXeLearning style packages, enable/disable built-in styles, and "
 "control the \"Block user-imported styles\" policy from a dedicated page."
 msgstr ""
 
-#: Module.php:874
+#: Module.php:875
 msgid "Embedded Editor"
 msgstr ""
 
-#: Module.php:878 src/Controller/EditorController.php:78
+#: Module.php:879 src/Controller/EditorController.php:80
 msgid ""
 "This installation does not include the embedded editor, so editing "
 "eXeLearning content is disabled. Official release packages include it; "
 "development checkouts must build it with \"make build-editor\"."
 msgstr ""
 
-#: view/exelearning/admin/media-show.phtml:28
+#: view/exelearning/admin/media-show.phtml:21
 msgid ""
 "This eXeLearning package could not be processed, so no preview is available."
 msgstr ""
 
-#: view/exelearning/admin/media-show.phtml:32
+#: view/exelearning/admin/media-show.phtml:25
 msgid "Fix the cause, then save this media to try again."
-msgstr ""
-
-#: view/exelearning/admin/media-show.phtml:43
-msgid "Edit eXeLearning File"
-msgstr ""
-
-#: view/exelearning/admin/media-show.phtml:47
-#: view/exelearning/admin/media-show.phtml:60
-#: src/Controller/EditorController.php:111
-msgid "Save to Omeka"
-msgstr ""
-
-#: view/exelearning/admin/media-show.phtml:50
-#: view/exelearning/admin/media-show.phtml:63
-#: src/Controller/EditorController.php:120
-msgid "Close"
-msgstr ""
-
-#: view/exelearning/admin/media-show.phtml:59
-#: src/Controller/EditorController.php:109
-msgid "Saving..."
-msgstr ""
-
-#: view/exelearning/admin/media-show.phtml:61
-#: src/Controller/EditorController.php:118
-msgid "Please wait while the file is being saved."
-msgstr ""
-
-#: view/exelearning/admin/media-show.phtml:62
-#: src/Controller/EditorController.php:119
-msgid "You have unsaved changes. Are you sure you want to close?"
 msgstr ""
 
 #: view/exelearning/admin/styles/index.phtml:22
@@ -210,50 +179,75 @@ msgid ""
 "installed."
 msgstr ""
 
-#: src/Controller/EditorController.php:59
+#: src/Controller/EditorController.php:60
 msgid "Media not found."
 msgstr ""
 
-#: src/Controller/EditorController.php:65
+#: src/Controller/EditorController.php:67
 msgid "You do not have permission to edit media."
 msgstr ""
 
-#: src/Controller/EditorController.php:70
+#: src/Controller/EditorController.php:72
 msgid "This is not an eXeLearning file."
 msgstr ""
 
-#: src/Controller/EditorController.php:110
-msgid "Saved successfully"
+#: src/Controller/EditorController.php:111
+#: src/Media/FileRenderer/ExeLearningRenderer.php:241
+msgid "Saving..."
 msgstr ""
 
 #: src/Controller/EditorController.php:112
-#: src/Controller/EditorController.php:256
-msgid "Loading project..."
+msgid "Saved successfully"
 msgstr ""
 
 #: src/Controller/EditorController.php:113
-#: src/Controller/EditorController.php:257
-msgid "Waiting for editor..."
+#: src/Media/FileRenderer/ExeLearningRenderer.php:242
+msgid "Save to Omeka"
 msgstr ""
 
 #: src/Controller/EditorController.php:114
 #: src/Controller/EditorController.php:258
-msgid "Downloading file..."
+msgid "Loading project..."
 msgstr ""
 
 #: src/Controller/EditorController.php:115
 #: src/Controller/EditorController.php:259
-msgid "Importing content..."
+msgid "Waiting for editor..."
 msgstr ""
 
 #: src/Controller/EditorController.php:116
 #: src/Controller/EditorController.php:260
-msgid "Error loading project"
+msgid "Downloading file..."
 msgstr ""
 
 #: src/Controller/EditorController.php:117
 #: src/Controller/EditorController.php:261
+msgid "Importing content..."
+msgstr ""
+
+#: src/Controller/EditorController.php:118
+#: src/Controller/EditorController.php:262
+msgid "Error loading project"
+msgstr ""
+
+#: src/Controller/EditorController.php:119
+#: src/Controller/EditorController.php:263
 msgid "Error"
+msgstr ""
+
+#: src/Controller/EditorController.php:120
+#: src/Media/FileRenderer/ExeLearningRenderer.php:243
+msgid "Please wait while the file is being saved."
+msgstr ""
+
+#: src/Controller/EditorController.php:121
+#: src/Media/FileRenderer/ExeLearningRenderer.php:244
+msgid "You have unsaved changes. Are you sure you want to close?"
+msgstr ""
+
+#: src/Controller/EditorController.php:122
+#: src/Media/FileRenderer/ExeLearningRenderer.php:245
+msgid "Close"
 msgstr ""
 
 #: src/Service/DownloadFormats.php:201
@@ -274,19 +268,23 @@ msgid ""
 "installation."
 msgstr ""
 
-#: src/Media/FileRenderer/ExeLearningRenderer.php:119
+#: src/Media/FileRenderer/ExeLearningRenderer.php:120
 msgid "Open fullscreen"
 msgstr ""
 
-#: src/Media/FileRenderer/ExeLearningRenderer.php:126
+#: src/Media/FileRenderer/ExeLearningRenderer.php:127
 msgid "Fullscreen"
 msgstr ""
 
-#: src/Media/FileRenderer/ExeLearningRenderer.php:218
+#: src/Media/FileRenderer/ExeLearningRenderer.php:227
 msgid "Edit in eXeLearning"
 msgstr ""
 
-#: src/Media/FileRenderer/ExeLearningRenderer.php:246
+#: src/Media/FileRenderer/ExeLearningRenderer.php:240
+msgid "Edit eXeLearning File"
+msgstr ""
+
+#: src/Media/FileRenderer/ExeLearningRenderer.php:271
 msgid "Download eXeLearning file"
 msgstr ""
 
@@ -310,11 +308,23 @@ msgstr ""
 msgid "Default height for the eXeLearning content viewer in pixels."
 msgstr ""
 
-#: src/Form/ConfigForm.php:49
+#: src/Form/ConfigForm.php:39
+msgid "Show \"Edit in eXeLearning\" on public pages"
+msgstr ""
+
+#: src/Form/ConfigForm.php:40
+msgid ""
+"Only logged-in users allowed to edit the media see the button: its owner, "
+"users whose role may update any resource, and the owner, admins and editors "
+"of a site the item is published on. It is always offered on the admin media "
+"page."
+msgstr ""
+
+#: src/Form/ConfigForm.php:61
 msgid "Download formats"
 msgstr ""
 
-#: src/Form/ConfigForm.php:50
+#: src/Form/ConfigForm.php:62
 msgid ""
 "Formats offered by the download split-button on embedded eXeLearning "
 "content. Non-source formats are produced client-side by the editor exporters "

@@ -4,22 +4,15 @@
  *
  * The viewer itself is rendered by ExeLearningRenderer through
  * $media->render(), which core's admin media page calls before triggering
- * view.show.after. This partial therefore carries only what the renderer
- * cannot: the editor modal its toolbar button opens, and the download filename
- * fix-up for core's File Derivatives links.
+ * view.show.after. The renderer also carries the edit button and loads the
+ * editor modal script, so the same button works on public pages. This partial
+ * carries only what is specific to this admin page: the processing error and
+ * the download filename fix-up for core's File Derivatives links.
  *
  * @var \Laminas\View\Renderer\PhpRenderer $this
  * @var \Omeka\Api\Representation\MediaRepresentation $media
  * @var string|null $processingError Why the last extraction attempt failed.
  */
-
-$canEdit = $this->identity() && $media->userIsAllowed('update');
-$editorInstalled = \ExeLearning\Service\EditorBundle::isAvailable();
-
-if ($canEdit && $editorInstalled) {
-    $this->headLink()->appendStylesheet($this->assetUrl('css/exelearning-editor.css', 'ExeLearning'));
-    $this->headScript()->appendFile($this->assetUrl('js/exelearning-editor.js', 'ExeLearning'));
-}
 ?>
 
 <?php if (!empty($processingError)): ?>
@@ -34,42 +27,13 @@ if ($canEdit && $editorInstalled) {
 </div>
 <?php endif; ?>
 
-<?php if ($canEdit && $editorInstalled): ?>
-<!-- eXeLearning Editor Modal -->
-<div id="exelearning-editor-modal" class="exelearning-editor-modal">
-    <div class="exelearning-editor-header">
-        <div class="exelearning-editor-title">
-            <span class="icon">&#9998;</span>
-            <span><?= $this->translate('Edit eXeLearning File') ?></span>
-        </div>
-        <div class="exelearning-editor-actions">
-            <button type="button" id="exelearning-editor-save" class="button button-primary">
-                <?= $this->translate('Save to Omeka') ?>
-            </button>
-            <button type="button" id="exelearning-editor-close" class="button button-secondary">
-                <?= $this->translate('Close') ?>
-            </button>
-        </div>
-    </div>
-    <iframe id="exelearning-editor-iframe" class="exelearning-editor-iframe" src="about:blank"></iframe>
-</div>
-
 <script>
-window.exelearningEditorI18n = {
-    saving: <?= json_encode($this->translate('Saving...')) ?>,
-    saveButton: <?= json_encode($this->translate('Save to Omeka')) ?>,
-    savingWait: <?= json_encode($this->translate('Please wait while the file is being saved.')) ?>,
-    unsavedChanges: <?= json_encode($this->translate('You have unsaved changes. Are you sure you want to close?')) ?>,
-    close: <?= json_encode($this->translate('Close')) ?>
-};
-
 // Add download attribute with original filename to File Derivatives links
 (function() {
-    var source = <?= json_encode($media->source()) ?>;
+    var source = <?= json_encode($media->source(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     if (!source) return;
     document.querySelectorAll('.meta-group a[href*="/files/original/"]').forEach(function(link) {
         link.setAttribute('download', source);
     });
 })();
 </script>
-<?php endif; ?>

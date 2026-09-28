@@ -6,6 +6,7 @@ namespace ExeLearning\Controller;
 use Laminas\Mvc\Controller\AbstractActionController;
 use Laminas\View\Model\JsonModel;
 use ExeLearning\Service\ElpFileService;
+use ExeLearning\Service\EditPermission;
 
 /**
  * REST API controller for eXeLearning operations.
@@ -100,8 +101,10 @@ class ApiController extends AbstractActionController
             return $this->errorResponse(404, 'Media not found');
         }
 
-        // Per-media check: authors may only edit media they own.
-        if (!$media->userIsAllowed('update')) {
+        // Same rule as the edit button and the editor page: owners, users who
+        // may update any media, and admins or editors of a site the item is
+        // published on.
+        if (!EditPermission::userCanEdit($media, $this->identity())) {
             return $this->errorResponse(403, 'Forbidden');
         }
 

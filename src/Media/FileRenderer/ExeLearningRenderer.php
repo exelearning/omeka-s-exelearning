@@ -10,6 +10,7 @@ use Laminas\View\Renderer\PhpRenderer;
 use ExeLearning\Service\ElpFileService;
 use ExeLearning\Service\DownloadFormats;
 use ExeLearning\Service\EditorBundle;
+use ExeLearning\Service\EditPermission;
 
 /**
  * Renderer for eXeLearning files.
@@ -126,11 +127,13 @@ class ExeLearningRenderer implements FileRendererInterface, MediaRendererInterfa
         $html .= $view->translate('Fullscreen');
         $html .= '</button>';
 
-        // Editing is admin-only, so the button appears only on an admin request
-        // for a user who may update the media and only when the editor bundle
-        // shipped with this package. The modal it drives is injected by the
-        // admin media-show hook.
-        $html .= $this->renderEditButton($view, $media);
+        // Offered to a user EditPermission allows, and only when the editor
+        // bundle shipped with this package. Always on the admin media page; on
+        // public pages unless the administrator turned it off. Last in the
+        // toolbar, so it sits at the top right of the viewer.
+        if ($this->isAdminRequest() || $this->isPublicEditEnabled($view)) {
+            $html .= $this->renderEditButton($view, $media);
+        }
 
         $html .= '</div>'; // toolbar-actions
         $html .= '</div>'; // toolbar
@@ -198,12 +201,12 @@ class ExeLearningRenderer implements FileRendererInterface, MediaRendererInterfa
      */
     protected function renderEditButton(PhpRenderer $view, MediaRepresentation $media): string
     {
-        if (!$this->isAdminRequest() || !EditorBundle::isAvailable()) {
+        if (!EditorBundle::isAvailable()) {
             return '';
         }
 
         try {
-            if (!$view->identity() || !$media->userIsAllowed('update')) {
+            if (!EditPermission::userCanEdit($media, $view->identity())) {
                 return '';
             }
             $editUrl = $view->url('admin/exelearning-editor', ['action' => 'edit', 'id' => $media->id()]);
@@ -211,14 +214,36 @@ class ExeLearningRenderer implements FileRendererInterface, MediaRendererInterfa
             return '';
         }
 
+        // The modal is built by exelearning-editor.js on first use, so the
+        // button works wherever the media is rendered: the admin media page, a
+        // public item or media page, or a site page block.
+        $view->headLink()->appendStylesheet($view->assetUrl('css/exelearning-editor.css', 'ExeLearning'));
+        $view->headScript()->appendFile($view->assetUrl('js/exelearning-editor.js', 'ExeLearning'));
+
         $html = '<button type="button" class="button exelearning-edit-btn" ';
         $html .= 'onclick="ExeLearningEditor.open(' . (int) $media->id();
         $html .= ", '" . $view->escapeJs($editUrl) . "')\">";
         $html .= '<span class="o-icon-edit" aria-hidden="true"></span> ';
         $html .= $view->translate('Edit in eXeLearning');
         $html .= '</button>';
+        $html .= '<script>window.exelearningEditorI18n=' . $this->editorI18n($view) . ';</script>';
 
         return $html;
+    }
+
+    /**
+     * Labels for the editor modal, as a JSON object safe to inline in a script.
+     */
+    protected function editorI18n(PhpRenderer $view): string
+    {
+        return (string) json_encode([
+            'title' => $view->translate('Edit eXeLearning File'),
+            'saving' => $view->translate('Saving...'),
+            'saveButton' => $view->translate('Save to Omeka'),
+            'savingWait' => $view->translate('Please wait while the file is being saved.'),
+            'unsavedChanges' => $view->translate('You have unsaved changes. Are you sure you want to close?'),
+            'close' => $view->translate('Close'),
+        ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
     }
 
     /**
@@ -310,6 +335,20 @@ class ExeLearningRenderer implements FileRendererInterface, MediaRendererInterfa
             ];
         } catch (\Exception $e) {
             return $defaults;
+        }
+    }
+
+    /**
+     * Whether the administrator allows the edit button on public pages.
+     * Defaults to on; the setting is stored as '1' or '0'.
+     */
+    protected function isPublicEditEnabled(PhpRenderer $view): bool
+    {
+        try {
+            $setting = $view->getHelperPluginManager()->get('setting');
+            return (bool) $setting('exelearning_public_edit', '1');
+        } catch (\Exception $e) {
+            return true;
         }
     }
 

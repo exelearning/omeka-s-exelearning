@@ -562,33 +562,177 @@ class ExeLearningRendererTest extends TestCase
         $this->assertStringContainsString('rel="noopener noreferrer"', $result);
     }
 
-    public function testRenderOmitsTheEditButtonOnAPublicRequest(): void
+    public function testRenderOffersTheEditButtonOnAPublicRequest(): void
     {
-        // Editing is admin-only, and this renderer now also runs on public
-        // pages, site page blocks and search results.
-        $hash = 'da39a3ee5e6b4b0d3255bfef95601890afd80709';
+        // A logged-in user who may edit the media sees the button on the public
+        // site too, with the editor script and its labels, since no admin
+        // template injects the modal there.
+        $this->withEditorBundle(function (): void {
+            $renderer = new ExeLearningRenderer(
+                $this->previewingService(),
+                $this->requestOn('/s/default/item/42')
+            );
 
-        $elpService = $this->createMock(ElpFileService::class);
-        $elpService->method('getMediaHash')->willReturn($hash);
-        $elpService->method('hasPreview')->willReturn(true);
+            $view = new \Laminas\View\Renderer\PhpRenderer();
+            $view->identity = (object) ['name' => 'admin'];
 
-        $renderer = new ExeLearningRenderer($elpService, $this->requestOn('/s/default/item/42'));
+            $result = $renderer->render($view, $this->elpxMedia());
 
-        $view = new \Laminas\View\Renderer\PhpRenderer();
+            $this->assertStringContainsString('exelearning-edit-btn', $result);
+            $this->assertStringContainsString('ExeLearningEditor.open(42', $result);
+            $this->assertStringContainsString('window.exelearningEditorI18n=', $result);
+            $this->assertStringContainsString('Edit eXeLearning File', $result);
+            $this->assertContains('/modules/ExeLearning/js/exelearning-editor.js', $view->headScript()->files);
+            $this->assertContains('/modules/ExeLearning/css/exelearning-editor.css', $view->headLink()->stylesheets);
+        });
+    }
+
+    public function testRenderOffersTheEditButtonToAnEditorOfTheItemsSite(): void
+    {
+        // Core ACL refuses the update (not the owner), but the user edits a
+        // site the item is published on.
+        $this->withEditorBundle(function (): void {
+            $renderer = new ExeLearningRenderer(
+                $this->previewingService(),
+                $this->requestOn('/s/default/item/42')
+            );
+
+            $view = new \Laminas\View\Renderer\PhpRenderer();
+            $view->identity = new class {
+                public function getId(): int
+                {
+                    return 7;
+                }
+            };
+            $media = new MediaRepresentation(
+                'http://example.com/course.elpx',
+                'Course',
+                'course.elpx',
+                42,
+                ['exelearning_extracted_hash' => self::PREVIEW_HASH, 'exelearning_has_preview' => '1'],
+                new \ExeLearningTest\Doubles\FakeItem([], [new \ExeLearningTest\Doubles\FakeSite(1, [7 => 'editor'])])
+            );
+            $media->userIsAllowed = false;
+
+            $result = $renderer->render($view, $media);
+
+            $this->assertStringContainsString('exelearning-edit-btn', $result);
+        });
+    }
+
+    public function testRenderLoadsNoEditorAssetsWithoutTheEditButton(): void
+    {
+        $this->withEditorBundle(function (): void {
+            $renderer = new ExeLearningRenderer(
+                $this->previewingService(),
+                $this->requestOn('/s/default/item/42')
+            );
+
+            $view = new \Laminas\View\Renderer\PhpRenderer();
+            $view->identity = null;
+
+            $result = $renderer->render($view, $this->elpxMedia());
+
+            $this->assertStringNotContainsString('exelearningEditorI18n', $result);
+            $this->assertNotContains('/modules/ExeLearning/js/exelearning-editor.js', $view->headScript()->files);
+        });
+    }
+
+    /**
+     * A view whose `setting` helper answers from $settings, with a logged-in
+     * user the core ACL lets update the media.
+     *
+     * @param array<string, mixed> $settings
+     */
+    private function viewWithSettings(array $settings): \Laminas\View\Renderer\PhpRenderer
+    {
+        $view = new class ($settings) extends \Laminas\View\Renderer\PhpRenderer {
+            /** @var array<string, mixed> */
+            private array $settings;
+
+            public function __construct(array $settings)
+            {
+                parent::__construct();
+                $this->settings = $settings;
+            }
+
+            public function getHelperPluginManager()
+            {
+                $settings = $this->settings;
+                return new class ($settings) {
+                    /** @var array<string, mixed> */
+                    private array $settings;
+
+                    public function __construct(array $settings)
+                    {
+                        $this->settings = $settings;
+                    }
+
+                    public function get(string $name)
+                    {
+                        $settings = $this->settings;
+                        return function (string $key, $default = null) use ($settings) {
+                            return array_key_exists($key, $settings) ? $settings[$key] : $default;
+                        };
+                    }
+                };
+            }
+        };
         $view->identity = (object) ['name' => 'admin'];
-        $view->userIsAllowed = true;
 
-        $media = new MediaRepresentation(
-            'http://example.com/course.elpx',
-            'Course',
-            'course.elpx',
-            42,
-            ['exelearning_extracted_hash' => $hash, 'exelearning_has_preview' => '1']
-        );
+        return $view;
+    }
 
-        $result = $renderer->render($view, $media);
+    public function testRenderOmitsTheEditButtonOnAPublicRequestWhenTheAdministratorTurnedItOff(): void
+    {
+        $this->withEditorBundle(function (): void {
+            $renderer = new ExeLearningRenderer(
+                $this->previewingService(),
+                $this->requestOn('/s/default/item/42')
+            );
+            $view = $this->viewWithSettings(['exelearning_public_edit' => '0']);
 
-        $this->assertStringNotContainsString('exelearning-edit-btn', $result);
+            $result = $renderer->render($view, $this->elpxMedia());
+
+            $this->assertStringNotContainsString('exelearning-edit-btn', $result);
+            $this->assertNotContains('/modules/ExeLearning/js/exelearning-editor.js', $view->headScript()->files);
+        });
+    }
+
+    public function testRenderKeepsTheEditButtonInAdminWhenPublicEditingIsOff(): void
+    {
+        // The setting governs public pages only.
+        $this->withEditorBundle(function (): void {
+            $renderer = new ExeLearningRenderer(
+                $this->previewingService(),
+                $this->requestOn('/admin/media/42')
+            );
+            $view = $this->viewWithSettings(['exelearning_public_edit' => '0']);
+
+            $result = $renderer->render($view, $this->elpxMedia());
+
+            $this->assertStringContainsString('exelearning-edit-btn', $result);
+        });
+    }
+
+    public function testRenderOffersTheEditButtonOnAPublicRequestWhenTheAdministratorAllowsIt(): void
+    {
+        $this->withEditorBundle(function (): void {
+            $renderer = new ExeLearningRenderer(
+                $this->previewingService(),
+                $this->requestOn('/s/default/item/42')
+            );
+            $view = $this->viewWithSettings(['exelearning_public_edit' => '1']);
+
+            $result = $renderer->render($view, $this->elpxMedia());
+
+            $this->assertStringContainsString('exelearning-edit-btn', $result);
+            // Last action in the toolbar: the top-right corner of the viewer.
+            $this->assertGreaterThan(
+                strpos($result, 'exelearning-fullscreen-btn'),
+                strpos($result, 'exelearning-edit-btn')
+            );
+        });
     }
 
     public function testRenderOmitsTheEditButtonForAUserWhoMayNotUpdate(): void
@@ -635,8 +779,8 @@ class ExeLearningRendererTest extends TestCase
         // The admin viewer used to be a second, divergent implementation in
         // view/exelearning/admin/media-show.phtml. Core's admin media template
         // calls $media->render() itself, so keeping both showed the viewer
-        // twice; the edit button lives here now and the partial carries only
-        // the modal.
+        // twice; the edit button lives here now, and the modal is built by
+        // the editor script the renderer enqueues.
         $this->withEditorBundle(function (): void {
             $renderer = new ExeLearningRenderer(
                 $this->previewingService(),

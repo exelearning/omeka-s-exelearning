@@ -813,6 +813,7 @@ JS
         $form->setData([
             'exelearning_viewer_height' => $settings->get('exelearning_viewer_height', 600),
             'exelearning_download_formats' => DownloadFormats::sanitize($storedFormats),
+            'exelearning_public_edit' => $settings->get('exelearning_public_edit', '1') ? '1' : '0',
         ]);
 
         $formHtml = $renderer->formCollection($form, false);
@@ -904,6 +905,10 @@ JS
         $settings->set(
             'exelearning_download_formats',
             DownloadFormats::sanitize($config['exelearning_download_formats'] ?? [])
+        );
+        $settings->set(
+            'exelearning_public_edit',
+            !empty($config['exelearning_public_edit']) ? '1' : '0'
         );
     }
 }
