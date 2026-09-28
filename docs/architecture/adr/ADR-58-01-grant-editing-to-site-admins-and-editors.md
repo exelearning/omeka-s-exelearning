@@ -96,8 +96,12 @@ We will use Option 3. `src/Service/EditPermission.php` is the only authority for
 eXeLearning editing. The edit button, `EditorController::editAction()` and
 `ApiController::saveAction()` all call it. The site roles that grant editing are
 `admin` and `editor`, plus the site owner. The edit button is shown wherever the
-media is rendered, on admin and public pages, and the editor script builds its
-modal on first use.
+media is rendered, as the last action of the viewer toolbar, and the editor
+script builds its modal on first use. On public pages it is governed by the
+`exelearning_public_edit` module setting (on by default); on the admin media page
+it is always offered. The setting only hides the button: it does not change who
+may edit, so the editor page and the save endpoint keep applying
+`EditPermission` alone.
 
 ## Consequences
 
@@ -116,6 +120,8 @@ modal on first use.
 
 ### Neutral
 
+- Administrators who prefer editing to stay in the admin can turn off the public
+  button without affecting anyone's rights.
 - Core ACL, core forms and the REST API are unchanged.
 - The teacher-mode endpoint keeps core's `update` check, because it backs core's
   media edit form.

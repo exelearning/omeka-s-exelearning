@@ -127,9 +127,13 @@ class ExeLearningRenderer implements FileRendererInterface, MediaRendererInterfa
         $html .= $view->translate('Fullscreen');
         $html .= '</button>';
 
-        // Offered on admin and public pages alike to a user EditPermission
-        // allows, and only when the editor bundle shipped with this package.
-        $html .= $this->renderEditButton($view, $media);
+        // Offered to a user EditPermission allows, and only when the editor
+        // bundle shipped with this package. Always on the admin media page; on
+        // public pages unless the administrator turned it off. Last in the
+        // toolbar, so it sits at the top right of the viewer.
+        if ($this->isAdminRequest() || $this->isPublicEditEnabled($view)) {
+            $html .= $this->renderEditButton($view, $media);
+        }
 
         $html .= '</div>'; // toolbar-actions
         $html .= '</div>'; // toolbar
@@ -331,6 +335,20 @@ class ExeLearningRenderer implements FileRendererInterface, MediaRendererInterfa
             ];
         } catch (\Exception $e) {
             return $defaults;
+        }
+    }
+
+    /**
+     * Whether the administrator allows the edit button on public pages.
+     * Defaults to on; the setting is stored as '1' or '0'.
+     */
+    protected function isPublicEditEnabled(PhpRenderer $view): bool
+    {
+        try {
+            $setting = $view->getHelperPluginManager()->get('setting');
+            return (bool) $setting('exelearning_public_edit', '1');
+        } catch (\Exception $e) {
+            return true;
         }
     }
 

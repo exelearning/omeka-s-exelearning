@@ -88,7 +88,10 @@ EXELEARNING_EDITOR_REF=vX.Y.Z EXELEARNING_EDITOR_REF_TYPE=tag make build-editor
 
 The button is shown to logged-in users who may update the media in Omeka (its owner, or a
 global role that may update any resource) and to the owner, admins and editors of a site the
-item is published on. Site viewers cannot edit.
+item is published on. Site viewers cannot edit. It sits at the top right of the viewer, next to
+the download and fullscreen buttons. Administrators can hide it on public pages with
+**Show "Edit in eXeLearning" on public pages** in the module configuration; it is always offered
+on the admin media page.
 
 ## Development
 

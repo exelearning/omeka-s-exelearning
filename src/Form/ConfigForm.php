@@ -32,6 +32,18 @@ class ConfigForm extends Form
             ],
         ]);
 
+        $this->add([
+            'name' => 'exelearning_public_edit',
+            'type' => Element\Checkbox::class,
+            'options' => [
+                'label' => 'Show "Edit in eXeLearning" on public pages', // @translate
+                'info' => 'Only logged-in users allowed to edit the media see the button: its owner, users whose role may update any resource, and the owner, admins and editors of a site the item is published on. It is always offered on the admin media page.', // @translate
+            ],
+            'attributes' => [
+                'value' => '1',
+            ],
+        ]);
+
         // Use the bare format label as the option label so the form's
         // multicheckbox view helper translates it against an existing catalog
         // entry (e.g. "IMS Package" -> "Paquete IMS"). The previous

@@ -638,6 +638,103 @@ class ExeLearningRendererTest extends TestCase
         });
     }
 
+    /**
+     * A view whose `setting` helper answers from $settings, with a logged-in
+     * user the core ACL lets update the media.
+     *
+     * @param array<string, mixed> $settings
+     */
+    private function viewWithSettings(array $settings): \Laminas\View\Renderer\PhpRenderer
+    {
+        $view = new class ($settings) extends \Laminas\View\Renderer\PhpRenderer {
+            /** @var array<string, mixed> */
+            private array $settings;
+
+            public function __construct(array $settings)
+            {
+                parent::__construct();
+                $this->settings = $settings;
+            }
+
+            public function getHelperPluginManager()
+            {
+                $settings = $this->settings;
+                return new class ($settings) {
+                    /** @var array<string, mixed> */
+                    private array $settings;
+
+                    public function __construct(array $settings)
+                    {
+                        $this->settings = $settings;
+                    }
+
+                    public function get(string $name)
+                    {
+                        $settings = $this->settings;
+                        return function (string $key, $default = null) use ($settings) {
+                            return array_key_exists($key, $settings) ? $settings[$key] : $default;
+                        };
+                    }
+                };
+            }
+        };
+        $view->identity = (object) ['name' => 'admin'];
+
+        return $view;
+    }
+
+    public function testRenderOmitsTheEditButtonOnAPublicRequestWhenTheAdministratorTurnedItOff(): void
+    {
+        $this->withEditorBundle(function (): void {
+            $renderer = new ExeLearningRenderer(
+                $this->previewingService(),
+                $this->requestOn('/s/default/item/42')
+            );
+            $view = $this->viewWithSettings(['exelearning_public_edit' => '0']);
+
+            $result = $renderer->render($view, $this->elpxMedia());
+
+            $this->assertStringNotContainsString('exelearning-edit-btn', $result);
+            $this->assertNotContains('/modules/ExeLearning/js/exelearning-editor.js', $view->headScript()->files);
+        });
+    }
+
+    public function testRenderKeepsTheEditButtonInAdminWhenPublicEditingIsOff(): void
+    {
+        // The setting governs public pages only.
+        $this->withEditorBundle(function (): void {
+            $renderer = new ExeLearningRenderer(
+                $this->previewingService(),
+                $this->requestOn('/admin/media/42')
+            );
+            $view = $this->viewWithSettings(['exelearning_public_edit' => '0']);
+
+            $result = $renderer->render($view, $this->elpxMedia());
+
+            $this->assertStringContainsString('exelearning-edit-btn', $result);
+        });
+    }
+
+    public function testRenderOffersTheEditButtonOnAPublicRequestWhenTheAdministratorAllowsIt(): void
+    {
+        $this->withEditorBundle(function (): void {
+            $renderer = new ExeLearningRenderer(
+                $this->previewingService(),
+                $this->requestOn('/s/default/item/42')
+            );
+            $view = $this->viewWithSettings(['exelearning_public_edit' => '1']);
+
+            $result = $renderer->render($view, $this->elpxMedia());
+
+            $this->assertStringContainsString('exelearning-edit-btn', $result);
+            // Last action in the toolbar: the top-right corner of the viewer.
+            $this->assertGreaterThan(
+                strpos($result, 'exelearning-fullscreen-btn'),
+                strpos($result, 'exelearning-edit-btn')
+            );
+        });
+    }
+
     public function testRenderOmitsTheEditButtonForAUserWhoMayNotUpdate(): void
     {
         $this->withEditorBundle(function (): void {
