@@ -81,9 +81,14 @@ EXELEARNING_EDITOR_REF=vX.Y.Z EXELEARNING_EDITOR_REF_TYPE=tag make build-editor
 
 ### Editing Content
 
-1. Go to the media page (**Admin > Items > [Your Item] > [Media]**)
+1. Go to the media page (**Admin > Items > [Your Item] > [Media]**), or to any public page
+   that shows the content while logged in
 2. Click **Edit in eXeLearning**
 3. Make your changes and click **Save to Omeka**
+
+The button is shown to logged-in users who may update the media in Omeka (its owner, or a
+global role that may update any resource) and to the owner, admins and editors of a site the
+item is published on. Site viewers cannot edit.
 
 ## Development
 
