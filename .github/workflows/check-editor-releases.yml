@@ -110,7 +110,7 @@ jobs:
           persist-credentials: false
 
       - name: Download package
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: module-package
 
