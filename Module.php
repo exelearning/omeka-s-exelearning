@@ -820,6 +820,7 @@ JS
             'exelearning_embed_mode' => IframeSandbox::embedMode(
                 $settings->get(IframeSandbox::EMBED_OPTION, IframeSandbox::EMBED_OPEN)
             ),
+            'exelearning_public_edit' => $settings->get('exelearning_public_edit', '1') ? '1' : '0',
         ]);
 
         $formHtml = $renderer->formCollection($form, false);
@@ -919,6 +920,10 @@ JS
         $settings->set(
             IframeSandbox::EMBED_OPTION,
             IframeSandbox::embedMode($config[IframeSandbox::EMBED_OPTION] ?? IframeSandbox::EMBED_OPEN)
+        );
+        $settings->set(
+            'exelearning_public_edit',
+            !empty($config['exelearning_public_edit']) ? '1' : '0'
         );
     }
 }

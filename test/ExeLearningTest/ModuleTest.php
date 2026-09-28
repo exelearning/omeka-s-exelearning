@@ -1163,6 +1163,19 @@ class ModuleTest extends TestCase
         $this->assertNotContains('bogus-format', $stored, 'unknown format ids must be dropped');
     }
 
+    public function testHandleConfigFormStoresThePublicEditToggle(): void
+    {
+        $settings = new Settings();
+        $module = new TestableModule(new TestServiceLocator(['Omeka\Settings' => $settings]));
+
+        $module->handleConfigForm(new FakeConfigController(['exelearning_public_edit' => '1']));
+        $this->assertSame('1', $settings->get('exelearning_public_edit'));
+
+        // An unchecked checkbox may be posted as '0' or omitted.
+        $module->handleConfigForm(new FakeConfigController(['exelearning_public_edit' => '0']));
+        $this->assertSame('0', $settings->get('exelearning_public_edit'));
+    }
+
     public function testHandleConfigFormFallsBackToDefaultHeight(): void
     {
         $settings = new Settings();

@@ -94,6 +94,14 @@ class ConfigFormTest extends TestCase
         $this->assertTrue($this->form->has('exelearning_download_formats'));
     }
 
+    public function testFormHasAPublicEditToggleOnByDefault(): void
+    {
+        $this->assertTrue($this->form->has('exelearning_public_edit'));
+        $element = $this->form->get('exelearning_public_edit');
+        $this->assertInstanceOf(\Laminas\Form\Element\Checkbox::class, $element);
+        $this->assertTrue($element->isChecked());
+    }
+
     // =========================================================================
     // Iframe security mode element tests
     // =========================================================================

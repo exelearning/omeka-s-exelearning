@@ -21,30 +21,76 @@
          * Initialize the editor.
          */
         init: function() {
-            this.modal = document.getElementById('exelearning-editor-modal');
-            this.iframe = document.getElementById('exelearning-editor-iframe');
-            this.saveBtn = document.getElementById('exelearning-editor-save');
-            this.closeBtn = document.getElementById('exelearning-editor-close');
-
-            if (this.modal) {
-                this.bindEvents();
-            }
-
-            // Start save button as disabled (enabled on DOCUMENT_LOADED)
-            if (this.saveBtn) {
-                this.saveBtn.disabled = true;
-                this.updateSaveButtonContent(false);
-            }
+            this.bindEvents();
         },
 
         /**
-         * Bind event handlers.
+         * Build the modal on first use. The edit button can appear on any
+         * page that renders the media (admin or public), so the markup lives
+         * here rather than in a page-specific template.
+         */
+        ensureModal: function() {
+            if (this.modal) {
+                return;
+            }
+            var self = this;
+            var i18n = window.exelearningEditorI18n || {};
+
+            var modal = document.createElement('div');
+            modal.id = 'exelearning-editor-modal';
+            modal.className = 'exelearning-editor-modal';
+
+            var header = document.createElement('div');
+            header.className = 'exelearning-editor-header';
+
+            var title = document.createElement('div');
+            title.className = 'exelearning-editor-title';
+            var icon = document.createElement('span');
+            icon.className = 'icon';
+            icon.setAttribute('aria-hidden', 'true');
+            icon.textContent = '\u270E';
+            var titleText = document.createElement('span');
+            titleText.textContent = i18n.title || 'Edit eXeLearning File';
+            title.appendChild(icon);
+            title.appendChild(titleText);
+
+            var actions = document.createElement('div');
+            actions.className = 'exelearning-editor-actions';
+            var saveBtn = document.createElement('button');
+            saveBtn.type = 'button';
+            saveBtn.id = 'exelearning-editor-save';
+            saveBtn.className = 'button button-primary';
+            var closeBtn = document.createElement('button');
+            closeBtn.type = 'button';
+            closeBtn.id = 'exelearning-editor-close';
+            closeBtn.className = 'button button-secondary';
+            closeBtn.textContent = i18n.close || 'Close';
+            actions.appendChild(saveBtn);
+            actions.appendChild(closeBtn);
+
+            header.appendChild(title);
+            header.appendChild(actions);
+            modal.appendChild(header);
+            document.body.appendChild(modal);
+
+            this.modal = modal;
+            this.saveBtn = saveBtn;
+            this.closeBtn = closeBtn;
+
+            saveBtn.addEventListener('click', function() { self.requestSave(); });
+            closeBtn.addEventListener('click', function() { self.close(); });
+
+            // Start save button as disabled (enabled on DOCUMENT_LOADED)
+            saveBtn.disabled = true;
+            this.updateSaveButtonContent(false);
+        },
+
+        /**
+         * Bind page-wide event handlers.
          */
         bindEvents: function() {
             var self = this;
 
-            this.saveBtn?.addEventListener('click', function() { self.requestSave(); });
-            this.closeBtn?.addEventListener('click', function() { self.close(); });
             window.addEventListener('message', function(event) { self.handleMessage(event); });
             document.addEventListener('keydown', function(e) {
                 if (e.key === 'Escape' && self.isOpen) {
@@ -194,11 +240,7 @@
 
             this.currentMediaId = mediaId;
             this.hasUnsavedChanges = false;
-
-            if (!this.modal) {
-                window.open(editorUrl, '_blank', 'width=1200,height=800');
-                return;
-            }
+            this.ensureModal();
 
             // Recreate iframe if it was destroyed by a previous close/save
             if (!this.iframe) {
@@ -349,10 +391,13 @@
             // otherwise the stale links 404 against the now-deleted extraction.
             // Use window.exelearningContentBase (set by the page's inline script)
             // so the playground SW scope prefix is preserved.
-            if (data.contentPath) {
+            // Only the edited media's viewer: a public item page can show
+            // several eXeLearning media, each with its own extraction.
+            var viewer = document.getElementById('exelearning-viewer-' + this.currentMediaId);
+            if (data.contentPath && viewer) {
                 var base = window.exelearningContentBase || window.location.origin;
                 var url = base + data.contentPath;
-                document.querySelectorAll('[data-exe-content-path]').forEach(function(el) {
+                viewer.querySelectorAll('[data-exe-content-path]').forEach(function(el) {
                     el.setAttribute('data-exe-content-path', data.contentPath);
                     if (el.tagName === 'IFRAME') {
                         el.src = url;

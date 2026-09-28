@@ -5,6 +5,7 @@ namespace ExeLearning\Controller;
 
 use ExeLearning\Service\ElpFileService;
 use ExeLearning\Service\EditorBundle;
+use ExeLearning\Service\EditPermission;
 use ExeLearning\Service\StylesService;
 use Laminas\Mvc\Controller\AbstractActionController;
 use Laminas\View\Model\ViewModel;
@@ -60,8 +61,9 @@ class EditorController extends AbstractActionController
             return $this->redirect()->toRoute('admin');
         }
 
-        // Per-media check: authors may only edit media they own.
-        if (!$media->userIsAllowed('update')) {
+        // Per-media check: owners, users who may update any media, and admins
+        // or editors of a site the item is published on.
+        if (!EditPermission::userCanEdit($media, $user)) {
             $this->messenger()->addError($this->translate('You do not have permission to edit media.')); // @translate
             return $this->redirect()->toRoute('admin');
         }

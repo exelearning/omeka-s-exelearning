@@ -113,7 +113,9 @@ final class DownloadFormatsTest extends TestCase
 
         $this->assertStringContainsString('data-format="elpx"', $html);
         $this->assertStringContainsString('data-suffix=".elpx"', $html);
-        $this->assertStringContainsString('class="exelearning-download__primary"', $html);
+        // A theme button, with the download icon from Omeka's icon font.
+        $this->assertStringContainsString('class="button exelearning-download__primary"', $html);
+        $this->assertStringContainsString('o-icon-exelearning-download', $html);
         $this->assertStringNotContainsString('exelearning-download__toggle', $html);
         $this->assertStringNotContainsString('exelearning-download__menu', $html);
     }
@@ -132,6 +134,26 @@ final class DownloadFormatsTest extends TestCase
         $this->assertStringContainsString('data-format="epub3"', $html);
         $this->assertStringContainsString('data-mime="application/epub+zip"', $html);
         $this->assertStringContainsString('data-suffix="_scorm.zip"', $html);
+    }
+
+    public function testRenderSplitButtonUsesThemeButtonsOnPublicAndAdminPages(): void
+    {
+        $view = $this->makeView();
+        $media = $this->makeMedia();
+
+        foreach (['default', 'admin'] as $variant) {
+            $html = DownloadFormats::renderSplitButton($view, $media, ['elpx', 'html5'], $variant);
+
+            $this->assertStringContainsString('class="button exelearning-download__primary"', $html, $variant);
+            $this->assertStringContainsString('class="button exelearning-download__toggle"', $html, $variant);
+            // Menu entries are plain rows, not buttons.
+            $this->assertStringContainsString('class="exelearning-download__item', $html, $variant);
+            $this->assertStringNotContainsString('button exelearning-download__item', $html, $variant);
+        }
+        $this->assertStringContainsString(
+            'exelearning-download--admin',
+            DownloadFormats::renderSplitButton($view, $media, ['elpx'], 'admin')
+        );
     }
 
     public function testRenderSplitButtonExposesMediaDataAttributes(): void
