@@ -130,8 +130,8 @@ final class DownloadFormats
      * @param \Omeka\Api\Representation\MediaRepresentation $media
      * @param string[]                                      $formatIds
      * @param string                                        $variant
-     *        UI variant: 'default' (front-end blue split-button) or 'admin'
-     *        (matches the neutral grey Omeka admin button bar).
+     *        'default' (public site) or 'admin'. Both render the active
+     *        theme's `.button`; 'admin' only adds a modifier class.
      */
     public static function renderSplitButton($view, $media, array $formatIds, string $variant = 'default'): string
     {
@@ -184,26 +184,25 @@ final class DownloadFormats
             $view->escapeHtmlAttr($slug)
         );
 
+        // Both variants use the active theme's own `.button`, so the toolbar
+        // looks like the rest of the admin or of the public theme; the variant
+        // only tags the root for context-specific tweaks.
         $rootClasses = 'exelearning-download';
         if ($variant === 'admin') {
             $rootClasses .= ' exelearning-download--admin';
         }
 
         $html = '<div class="' . $rootClasses . '" ' . $dataAttrs . '>';
-        $html .= self::renderItem($view, $primary, true, $variant);
+        $html .= self::renderItem($view, $primary, true);
 
         if (!empty($dropdown)) {
-            $toggleClasses = 'exelearning-download__toggle';
-            if ($variant === 'admin') {
-                $toggleClasses .= ' button';
-            }
-            $html .= '<button type="button" class="' . $toggleClasses . '" aria-haspopup="true" aria-expanded="false" aria-label="'
+            $html .= '<button type="button" class="button exelearning-download__toggle" aria-haspopup="true" aria-expanded="false" aria-label="'
                 . $view->escapeHtmlAttr($view->translate('More download formats')) . '">';
-            $html .= '<span class="exelearning-download__caret">&#9662;</span>';
+            $html .= '<span class="o-icon-exelearning-caret" aria-hidden="true"></span>';
             $html .= '</button>';
             $html .= '<ul class="exelearning-download__menu" role="menu" hidden>';
             foreach ($dropdown as $fmt) {
-                $html .= '<li role="none">' . self::renderItem($view, $fmt, false, $variant) . '</li>';
+                $html .= '<li role="none">' . self::renderItem($view, $fmt, false) . '</li>';
             }
             $html .= '</ul>';
         }
@@ -253,22 +252,17 @@ final class DownloadFormats
      * @param \Laminas\View\Renderer\PhpRenderer $view
      * @param array<string, mixed>               $fmt
      */
-    private static function renderItem($view, array $fmt, bool $isPrimary, string $variant = 'default'): string
+    private static function renderItem($view, array $fmt, bool $isPrimary): string
     {
-        $classes = $isPrimary ? 'exelearning-download__primary' : 'exelearning-download__item';
-        if ($variant === 'admin') {
-            $classes .= ' button';
-        }
+        // The primary action is a theme button; menu entries are plain rows.
+        $classes = $isPrimary ? 'button exelearning-download__primary' : 'exelearning-download__item';
         $disabled = !empty($fmt['disabled']);
         if ($disabled) {
             $classes .= ' exelearning-download__item--disabled';
         }
         $label = $view->translate((string) $fmt['label']);
 
-        $icon = '';
-        if ($variant === 'admin' && $isPrimary) {
-            $icon = '<span class="o-icon-download" aria-hidden="true"></span> ';
-        }
+        $icon = $isPrimary ? '<span class="o-icon-exelearning-download" aria-hidden="true"></span>' : '';
 
         $title = $disabled
             ? $view->escapeHtmlAttr($view->translate('This format requires the embedded editor, which is not included in this installation.'))

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-28 10:15+0100\n"
+"POT-Creation-Date: 2026-09-28 10:44+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -192,7 +192,7 @@ msgid "This is not an eXeLearning file."
 msgstr ""
 
 #: src/Controller/EditorController.php:111
-#: src/Media/FileRenderer/ExeLearningRenderer.php:241
+#: src/Media/FileRenderer/ExeLearningRenderer.php:244
 msgid "Saving..."
 msgstr ""
 
@@ -201,7 +201,7 @@ msgid "Saved successfully"
 msgstr ""
 
 #: src/Controller/EditorController.php:113
-#: src/Media/FileRenderer/ExeLearningRenderer.php:242
+#: src/Media/FileRenderer/ExeLearningRenderer.php:245
 msgid "Save to Omeka"
 msgstr ""
 
@@ -236,55 +236,55 @@ msgid "Error"
 msgstr ""
 
 #: src/Controller/EditorController.php:120
-#: src/Media/FileRenderer/ExeLearningRenderer.php:243
+#: src/Media/FileRenderer/ExeLearningRenderer.php:246
 msgid "Please wait while the file is being saved."
 msgstr ""
 
 #: src/Controller/EditorController.php:121
-#: src/Media/FileRenderer/ExeLearningRenderer.php:244
+#: src/Media/FileRenderer/ExeLearningRenderer.php:247
 msgid "You have unsaved changes. Are you sure you want to close?"
 msgstr ""
 
 #: src/Controller/EditorController.php:122
-#: src/Media/FileRenderer/ExeLearningRenderer.php:245
+#: src/Media/FileRenderer/ExeLearningRenderer.php:248
 msgid "Close"
 msgstr ""
 
-#: src/Service/DownloadFormats.php:201
+#: src/Service/DownloadFormats.php:200
 msgid "More download formats"
 msgstr ""
 
-#: src/Service/DownloadFormats.php:246
+#: src/Service/DownloadFormats.php:245
 msgid "Preparing download…"
 msgstr ""
 
-#: src/Service/DownloadFormats.php:247
+#: src/Service/DownloadFormats.php:246
 msgid "Download failed. Please try again."
 msgstr ""
 
-#: src/Service/DownloadFormats.php:274
+#: src/Service/DownloadFormats.php:268
 msgid ""
 "This format requires the embedded editor, which is not included in this "
 "installation."
 msgstr ""
 
-#: src/Media/FileRenderer/ExeLearningRenderer.php:120
-msgid "Open fullscreen"
+#: src/Media/FileRenderer/ExeLearningRenderer.php:123
+msgid "Open in new window"
 msgstr ""
 
-#: src/Media/FileRenderer/ExeLearningRenderer.php:127
+#: src/Media/FileRenderer/ExeLearningRenderer.php:130
 msgid "Fullscreen"
 msgstr ""
 
-#: src/Media/FileRenderer/ExeLearningRenderer.php:227
+#: src/Media/FileRenderer/ExeLearningRenderer.php:230
 msgid "Edit in eXeLearning"
 msgstr ""
 
-#: src/Media/FileRenderer/ExeLearningRenderer.php:240
+#: src/Media/FileRenderer/ExeLearningRenderer.php:243
 msgid "Edit eXeLearning File"
 msgstr ""
 
-#: src/Media/FileRenderer/ExeLearningRenderer.php:271
+#: src/Media/FileRenderer/ExeLearningRenderer.php:275
 msgid "Download eXeLearning file"
 msgstr ""
 
