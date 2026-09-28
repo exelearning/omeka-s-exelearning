@@ -4,6 +4,9 @@ title: "Grant eXeLearning editing to the admins and editors of the item's sites"
 status: Proposed
 date: 2026-09-28
 tracking_issue: 58
+deciders:
+  - "@erseco"
+  - "claude-code"
 related:
   issues: []
   prs: [58]
