@@ -159,6 +159,95 @@
         else container.removeAttribute('data-busy');
     }
 
+    /**
+     * Download the original uploaded .elpx of a split-button container.
+     *
+     * @param {Element} container `.exelearning-download` root
+     * @param {string} suffix filename suffix of the .elpx format
+     * @returns {Promise<void>}
+     */
+    function downloadOriginalElpx(container, suffix) {
+        var elpUrl = container.getAttribute('data-elp-url');
+        if (!elpUrl) {
+            return Promise.resolve();
+        }
+        var mediaId = parseInt(container.getAttribute('data-media-id'), 10);
+        var slug = container.getAttribute('data-slug') || ('media-' + mediaId);
+        var elpxName = slug + suffix;
+        // The .elpx is the uploaded media itself — no editor/export needed.
+        // Prefer fetch + blob over a plain `<a download>`: in the php-wasm
+        // playground, uploads are served by a service worker that a
+        // top-level download navigation bypasses (hitting the static host →
+        // 404 "file not available"). A page fetch goes through that worker,
+        // so the blob download works everywhere; fall back to a direct link
+        // if fetch is unavailable or fails.
+        if (typeof window.fetch !== 'function') {
+            linkDownload(elpUrl, elpxName);
+            return Promise.resolve();
+        }
+        setBusy(container, true);
+        return window.fetch(elpUrl, { credentials: 'same-origin' })
+            .then(function(resp) {
+                if (!resp.ok) {
+                    throw new Error('HTTP ' + resp.status);
+                }
+                return resp.blob();
+            })
+            .then(function(blob) {
+                triggerDownload(blob, elpxName);
+            })
+            .catch(function() {
+                // Last resort: let the browser try the direct media URL.
+                linkDownload(elpUrl, elpxName);
+            })
+            .finally(function() {
+                setBusy(container, false);
+            });
+    }
+
+    /**
+     * Point the package's own "Download .elpx" button at the original upload.
+     *
+     * The download-source-file iDevice's inline onclick calls the content's
+     * global downloadElpx(), which refetches every file of the package and
+     * rebuilds the ZIP in the browser. That is slow and memory-hungry, drops
+     * content.xml in packages exported before eXeLearning #2196, and hangs at
+     * "Processing... 100%" under the content CSP in versions without the
+     * worker fallback (exelearning/exelearning#2488). The original .elpx is
+     * the same project and the toolbar already offers it, so serve that.
+     *
+     * Only while the .elpx format is offered in this viewer's toolbar, and
+     * only while the viewer iframe is same-origin (see ExeLearningRenderer).
+     * With an opaque-origin sandbox the access throws and the package keeps
+     * its own download.
+     *
+     * @param {HTMLIFrameElement} frame
+     */
+    function routeContentDownload(frame) {
+        if (!frame || frame.tagName !== 'IFRAME' || !frame.classList.contains('exelearning-iframe')) {
+            return;
+        }
+        var viewer = frame.closest('.exelearning-viewer');
+        var container = viewer && viewer.querySelector('.exelearning-download[data-elp-url]');
+        var elpxItem = container
+            && container.querySelector('[data-format="elpx"]:not(.exelearning-download__item--disabled)');
+        if (!elpxItem) {
+            return;
+        }
+        var suffix = elpxItem.getAttribute('data-suffix') || '.elpx';
+        try {
+            var win = frame.contentWindow;
+            if (!win || typeof win.downloadElpx !== 'function') {
+                return;
+            }
+            win.downloadElpx = function() {
+                return downloadOriginalElpx(container, suffix);
+            };
+        } catch (e) {
+            // Cross-origin frame: leave the package's own download in place.
+        }
+    }
+
     function showStatus(container, message) {
         var existing = container.querySelector('.exelearning-download__status');
         if (!message) {
@@ -210,45 +299,12 @@
         var format = target.getAttribute('data-format');
         var suffix = target.getAttribute('data-suffix') || '';
         var mediaId = parseInt(container.getAttribute('data-media-id'), 10);
-        var elpUrl = container.getAttribute('data-elp-url');
         var slug = container.getAttribute('data-slug') || ('media-' + mediaId);
         closeAllMenus();
 
         if (format === 'elpx') {
             event.preventDefault();
-            if (!elpUrl) {
-                return;
-            }
-            var elpxName = slug + suffix;
-            // The .elpx is the uploaded media itself — no editor/export needed.
-            // Prefer fetch + blob over a plain `<a download>`: in the php-wasm
-            // playground, uploads are served by a service worker that a
-            // top-level download navigation bypasses (hitting the static host →
-            // 404 "file not available"). A page fetch goes through that worker,
-            // so the blob download works everywhere; fall back to a direct link
-            // if fetch is unavailable or fails.
-            if (typeof window.fetch !== 'function') {
-                linkDownload(elpUrl, elpxName);
-                return;
-            }
-            setBusy(container, true);
-            window.fetch(elpUrl, { credentials: 'same-origin' })
-                .then(function(resp) {
-                    if (!resp.ok) {
-                        throw new Error('HTTP ' + resp.status);
-                    }
-                    return resp.blob();
-                })
-                .then(function(blob) {
-                    triggerDownload(blob, elpxName);
-                })
-                .catch(function() {
-                    // Last resort: let the browser try the direct media URL.
-                    linkDownload(elpUrl, elpxName);
-                })
-                .finally(function() {
-                    setBusy(container, false);
-                });
+            downloadOriginalElpx(container, suffix);
             return;
         }
 
@@ -282,11 +338,20 @@
     }
 
     function init() {
+        // Frames that finished loading before this ran (every page the viewer
+        // navigates to later is caught by the capturing load listener below).
+        document.querySelectorAll('iframe.exelearning-iframe').forEach(routeContentDownload);
         document.addEventListener('click', onClick);
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') closeAllMenus();
         });
     }
+
+    // `load` does not bubble, but it is dispatched through the capture phase,
+    // so one listener sees every viewer iframe, including later navigations.
+    document.addEventListener('load', function(event) {
+        routeContentDownload(event.target);
+    }, true);
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);

@@ -160,12 +160,18 @@ class ExeLearningRenderer implements FileRendererInterface, MediaRendererInterfa
         //
         // PR #21 (feature/secure-iframe-sandbox) replaces this with an
         // opaque-origin viewer and owns the fix. See ADR-39-02.
+        //
+        // `allow-downloads` lets the package's own "Download .elpx" button
+        // (download-source-file iDevice) save the file it builds; without it
+        // the browser drops the download. It grants nothing a same-origin
+        // frame could not already do, and is what an opaque frame will need.
+        // See ADR-63-01.
         $html .= '<iframe ';
         $html .= 'id="' . $iframeId . '" ';
         $html .= 'data-exe-content-path="' . $view->escapeHtmlAttr($contentPath) . '" ';
         $html .= 'class="exelearning-iframe" ';
         $html .= 'style="width: 100%; height: ' . (int) $config['height'] . 'px; border: none;" ';
-        $html .= 'sandbox="allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox" ';
+        $html .= 'sandbox="allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox allow-downloads" ';
         $html .= 'referrerpolicy="no-referrer" ';
         $html .= 'allowfullscreen>';
         $html .= '</iframe>';

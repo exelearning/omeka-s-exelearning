@@ -154,6 +154,11 @@ class ContentController extends AbstractActionController
             $csp = implode('; ', [
                 "default-src 'self'",
                 "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+                // The package's download-source-file button rebuilds the .elpx
+                // with fflate, which compresses in blob: workers. Scripts here
+                // already run with 'unsafe-inline'/'unsafe-eval', so this adds
+                // no capability (ADR-63-01).
+                "worker-src 'self' blob:",
                 "style-src 'self' 'unsafe-inline'",
                 "img-src 'self' data: blob:",
                 "media-src 'self' data: blob:",
