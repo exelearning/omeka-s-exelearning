@@ -887,9 +887,11 @@ class ExeLearningRendererTest extends TestCase
         // preserved only so this change alters renderer registration without
         // also altering the security posture, and because dropping the flag
         // alone breaks the viewer without hardening anything. PR #21 replaces
-        // this with an opaque-origin viewer; see ADR-39-02.
+        // this with an opaque-origin viewer; see ADR-39-02. allow-downloads
+        // lets the package's own .elpx download button save its file
+        // (ADR-63-01).
         $this->assertStringContainsString(
-            'sandbox="allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox"',
+            'sandbox="allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox allow-downloads"',
             $result
         );
         $this->assertStringContainsString('referrerpolicy="no-referrer"', $result);

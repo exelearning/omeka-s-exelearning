@@ -338,6 +338,9 @@ class ContentControllerTest extends TestCase
         $this->assertStringContainsString("script-src 'self' 'unsafe-inline' 'unsafe-eval'", $csp);
         $this->assertStringContainsString("style-src 'self' 'unsafe-inline'", $csp);
         $this->assertStringContainsString("img-src 'self' data: blob:", $csp);
+        // fflate, used by the package's download-source-file button to rebuild
+        // the .elpx, compresses in blob: workers (ADR-63-01).
+        $this->assertStringContainsString("worker-src 'self' blob:", $csp);
         $this->assertStringContainsString("frame-ancestors 'self'", $csp);
         $this->assertStringContainsString("form-action 'none'", $csp);
     }
