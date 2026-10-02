@@ -2,8 +2,10 @@
 #
 # `make package` copies the tree with `rsync --exclude-from=.distignore`, so
 # these are rsync patterns: a leading slash anchors to the package root, and an
-# unanchored rule matches at any depth (which is why `test/` also removes a
-# nested test directory, wherever it turns up).
+# unanchored rule matches at any depth. Anchor every directory rule: the editor
+# under dist/static/ has its own themes/ and vendor/ folders (built-in styles,
+# the TinyMCE theme, the SCORM 1.2 runtime), and an unanchored `themes/` once
+# shipped packages whose editor previews and screenshots had no style.
 #
 # The bundled editor under dist/static/ is a release artifact and must stay in
 # the package -- see ADR-28-01. Do not add a `dist` rule here.
@@ -38,18 +40,18 @@ node_modules
 # (see the header comment); asset/css, asset/js and asset/thumbnails do ship.
 /exelearning/
 /asset/static
-vendor/
-themes/
+/vendor/
+/themes/
 
 # Tests, their caches, and the coverage reports they write
-test/
-test/.phpunit.result.cache
-test/.phpunit.cache/
-artifacts/
+/test/
+/test/.phpunit.result.cache
+/test/.phpunit.cache/
+/artifacts/
 
 # Development tooling and configuration. scripts/ holds the architecture-record
 # validator: a documentation linter, not module code.
-scripts/
+/scripts/
 phpmd.xml
 codecov.yml
 Makefile
@@ -61,7 +63,7 @@ blueprint.json
 renovate.json
 
 # Repository documentation. docs/ holds the architecture records, not user docs.
-docs/
+/docs/
 
 # Packaging output
 *.zip
