@@ -105,7 +105,7 @@ make test-coverage  # Tests + coverage gate (what CI runs)
 make package VERSION=1.2.3  # Build a .zip release
 ```
 
-Default credentials: `admin@example.com` / `PLEASE_CHANGEME`
+Default credentials: `admin@example.com` / `password` (from `blueprint.json`, the same file as the Omeka S Playground; `editor@example.com` / `1234` too)
 
 `make test-coverage` is the blocking verification gate: it fails on any failing
 test and on line coverage below `MIN_COVERAGE` (90%), and writes its reports to

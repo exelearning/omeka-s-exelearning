@@ -1,10 +1,6 @@
 {
-  "$schema": "https://ateeducacion.github.io/omeka-s-playground/assets/blueprints/blueprint-schema.json",
-  "debug": {
-    "enabled": true
-  },
-  "landingPage": "/admin",
-  "siteOptions": {
+  "$schema": "https://omeka-s-contrib.github.io/omeka-s-blueprints/schema/v0/blueprint-schema.json",
+  "install": {
     "title": "eXeLearning Playground",
     "locale": "es",
     "timezone": "Atlantic/Canary"
@@ -15,22 +11,26 @@
       "email": "admin@example.com",
       "password": "password",
       "role": "global_admin"
+    },
+    {
+      "username": "editor",
+      "email": "editor@example.com",
+      "password": "1234",
+      "role": "editor"
     }
   ],
   "modules": [
     {
       "name": "ExeLearning",
       "state": "activate",
-      "source": {
-        "type": "url",
-        "url": "https://github.com/exelearning/omeka-s-exelearning/archive/refs/heads/main.zip"
-      },
-      "assets": [
-        {
-          "url": "https://github.com/exelearning/exelearning/releases/download/v4.0.5/exelearning-static-v4.0.5.zip",
-          "destination": "dist/static"
-        }
-      ]
+      "source": "https://github.com/exelearning/omeka-s-exelearning/archive/refs/heads/main.zip"
+    }
+  ],
+  "files": [
+    {
+      "source": "https://github.com/exelearning/exelearning/releases/download/v4.0.5/exelearning-static-v4.0.5.zip",
+      "destination": "modules/ExeLearning/dist/static",
+      "extract": true
     }
   ],
   "itemSets": [
@@ -44,7 +44,9 @@
       "title": "Really Simple Test Project",
       "description": "Minimal eXeLearning project to validate viewing and editing of .elpx files.",
       "creator": "eXeLearning",
-      "itemSets": ["eXeLearning Samples"],
+      "itemSets": [
+        "eXeLearning Samples"
+      ],
       "media": [
         {
           "type": "url",
@@ -54,12 +56,20 @@
       ]
     }
   ],
-  "site": {
-    "title": "eXeLearning Demo",
-    "slug": "demo",
-    "theme": "default",
-    "summary": "Minimal setup to test the eXeLearning module in Omeka S Playground.",
-    "isPublic": true,
-    "setAsDefault": true
+  "sites": [
+    {
+      "title": "eXeLearning Demo",
+      "slug": "demo",
+      "theme": "default",
+      "summary": "Minimal setup to test the eXeLearning module in Omeka S Playground.",
+      "isPublic": true,
+      "setAsDefault": true
+    }
+  ],
+  "x-playground": {
+    "debug": {
+      "enabled": true
+    },
+    "landingPage": "/admin"
   }
 }
