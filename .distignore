@@ -28,11 +28,16 @@
 .claude
 AGENTS.md
 CLAUDE.md
+# rsync matches names case-sensitively, and the pointer was once tracked as
+# claude.md; a macOS checkout can keep that spelling on disk after the rename.
+claude.md
 
 # Editor and local tooling leftovers
 .aider*
 .DS_Store
 .env
+.env.dist
+.playwright-mcp
 node_modules
 
 # Build inputs. Only the built editor in dist/static/ ships; the editor
@@ -52,6 +57,8 @@ node_modules
 # Development tooling and configuration. scripts/ holds the architecture-record
 # validator: a documentation linter, not module code.
 /scripts/
+/architecture-records.json
+/.editor-version
 phpmd.xml
 codecov.yml
 Makefile
@@ -62,8 +69,22 @@ composer.lock
 blueprint.json
 renovate.json
 
-# Repository documentation. docs/ holds the architecture records, not user docs.
+# Development data for `make up`/`make seed` and the Playground blueprint (which
+# fetches the fixture from GitHub, not from the package). data/ itself ships:
+# data/nginx-exelearning.conf is the server snippet the README tells admins to use.
+/data/fixtures/
+/data/*.csv
+/data/seed-exelearning.sh
+
+# Translation sources. Omeka loads language/*.mo only (config/module.config.php).
+/language/*.po
+/language/*.pot
+
+# Repository documentation and local analysis. docs/ holds the architecture
+# records, not user docs.
 /docs/
+/analysis/
+/legacy/
 
 # Packaging output
 *.zip
