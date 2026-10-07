@@ -59,12 +59,47 @@ class DistignoreTest extends TestCase
             'scripts/check.sh',
             'docs/index.md',
             'artifacts/report.txt',
+            // Only one spelling: the two collide on case-insensitive file systems.
+            'claude.md',
+            'AGENTS.md',
+            '.env.dist',
+            '.editor-version',
+            'architecture-records.json',
+            'data/fixtures/really-simple-test-project.elpx',
+            'data/sample_data.csv',
+            'data/sample_3d_data.csv',
+            'data/seed-exelearning.sh',
+            'language/es.po',
+            'language/template.pot',
+            'analysis/report.md',
+            'legacy/old.php',
         ];
         $this->package(array_merge($devFiles, ['Module.php']));
 
         $this->assertFileExists($this->target . '/Module.php');
         foreach ($devFiles as $file) {
             $this->assertFileDoesNotExist($this->target . '/' . $file, "$file must not ship in the release ZIP");
+        }
+    }
+
+    public function testRuntimeFilesShip(): void
+    {
+        $runtimeFiles = [
+            'Module.php',
+            'config/module.ini',
+            'config/module.config.php',
+            'src/Service/FilesPath.php',
+            'view/exelearning/editor-bootstrap.phtml',
+            'asset/js/exelearning-viewer.js',
+            'language/es.mo',
+            'data/nginx-exelearning.conf',
+            'README.md',
+            'LICENSE',
+        ];
+        $this->package($runtimeFiles);
+
+        foreach ($runtimeFiles as $file) {
+            $this->assertFileExists($this->target . '/' . $file, "$file must ship in the release ZIP");
         }
     }
 
