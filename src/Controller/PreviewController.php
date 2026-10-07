@@ -570,31 +570,13 @@ class PreviewController extends AbstractActionController
      */
     private function parseRange(?string $value, int $total)
     {
-        if ($value === null || $value === '') {
+        // Absent, non-"bytes", multi-range (a comma) or malformed headers, and a
+        // spec with neither position, are all ignored (200).
+        if (!preg_match('/^bytes=(\d*)-(\d*)$/i', trim((string) $value), $matches)
+            || $matches[1] . $matches[2] === '') {
             return null;
         }
-        $value = trim($value);
-
-        // Only the "bytes" unit is supported; any other unit is ignored (200).
-        if (strncasecmp($value, 'bytes=', 6) !== 0) {
-            return null;
-        }
-        $spec = substr($value, 6);
-
-        // Multiple ranges are unsupported; ignore the whole header (200).
-        if (strpos($spec, ',') !== false) {
-            return null;
-        }
-        // A single byte-range-spec: first-byte-pos / last-byte-pos, both digits,
-        // at least one present. Anything else is malformed -> ignore (200).
-        if (!preg_match('/^(\d*)-(\d*)$/', $spec, $matches)) {
-            return null;
-        }
-        $rawStart = $matches[1];
-        $rawEnd = $matches[2];
-        if ($rawStart === '' && $rawEnd === '') {
-            return null;
-        }
+        [, $rawStart, $rawEnd] = $matches;
 
         if ($rawStart === '') {
             // Suffix range (last N bytes). A zero-length suffix is a valid but
@@ -607,15 +589,7 @@ class PreviewController extends AbstractActionController
         }
 
         $start = (int) $rawStart;
-        if ($rawEnd === '') {
-            if ($start >= $total) {
-                return 'unsatisfiable';
-            }
-            return ['start' => $start, 'end' => $total - 1];
-        }
-
-        $end = (int) $rawEnd;
-        if ($end < $start) {
+        if ($rawEnd !== '' && (int) $rawEnd < $start) {
             // last-byte-pos < first-byte-pos is an INVALID spec (RFC 9110
             // §14.1.2), not merely unsatisfiable -> ignore the header (200).
             return null;
@@ -623,6 +597,7 @@ class PreviewController extends AbstractActionController
         if ($start >= $total) {
             return 'unsatisfiable';
         }
-        return ['start' => $start, 'end' => min($end, $total - 1)];
+        $end = $rawEnd === '' ? $total - 1 : min((int) $rawEnd, $total - 1);
+        return ['start' => $start, 'end' => $end];
     }
 }

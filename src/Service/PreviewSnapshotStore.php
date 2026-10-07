@@ -80,6 +80,23 @@ class PreviewSnapshotStore
         }
 
         $staging = $this->basePath . '/.staging-' . bin2hex(random_bytes(12));
+        $error = $this->stage($staging, $ownerId, $zipPath)
+            ?? $this->publish($staging, $this->basePath . '/' . $id);
+        if ($error !== null) {
+            $this->removeTree($staging);
+            return $error;
+        }
+
+        return ['previewId' => $id];
+    }
+
+    /**
+     * Build a complete snapshot (content, meta.json, access clock) in $staging.
+     *
+     * @return array{error:string,status:int}|null Null on success.
+     */
+    private function stage(string $staging, int $ownerId, string $zipPath): ?array
+    {
         if (!is_dir($staging . '/content')
             && !@mkdir($staging . '/content', 0700, true)
             && !is_dir($staging . '/content')) {
@@ -88,7 +105,6 @@ class PreviewSnapshotStore
 
         $zip = new ZipArchive();
         if ($zip->open($zipPath) !== true) {
-            $this->removeTree($staging);
             return ['error' => 'Invalid preview archive.', 'status' => 400];
         }
         try {
@@ -98,41 +114,44 @@ class PreviewSnapshotStore
             // the attacker-declared sizes in the central directory.
             ZipSafety::extract($zip, $staging . '/content', $this->maxFiles, $this->maxBytes);
         } catch (\RuntimeException $e) {
-            $zip->close();
-            $this->removeTree($staging);
             return ['error' => $e->getMessage(), 'status' => 400];
+        } finally {
+            $zip->close();
         }
-        $zip->close();
 
         if (!is_file($staging . '/content/index.html')) {
-            $this->removeTree($staging);
             return ['error' => 'Preview archive must contain index.html.', 'status' => 400];
         }
 
         $wrote = @file_put_contents($staging . '/meta.json', json_encode(['ownerId' => $ownerId]));
         if ($wrote === false || !@touch($staging . '/access', ($this->now)())) {
-            $this->removeTree($staging);
             return ['error' => 'Could not write the preview metadata.', 'status' => 500];
         }
+        return null;
+    }
 
-        $target = $this->basePath . '/' . $id;
+    /**
+     * Swap $staging in as $target. The live tree is moved aside first and put
+     * back if the swap fails, so a reader never sees a partial snapshot.
+     *
+     * @return array{error:string,status:int}|null Null on success.
+     */
+    private function publish(string $staging, string $target): ?array
+    {
         $backup = $target . '.old-' . bin2hex(random_bytes(6));
         if (is_dir($target) && !@rename($target, $backup)) {
-            $this->removeTree($staging);
             return ['error' => 'Could not replace the preview snapshot.', 'status' => 500];
         }
         if (!@rename($staging, $target)) {
             if (is_dir($backup)) {
                 @rename($backup, $target);
             }
-            $this->removeTree($staging);
             return ['error' => 'Could not publish the preview snapshot.', 'status' => 500];
         }
         if (is_dir($backup)) {
             $this->removeTree($backup);
         }
-
-        return ['previewId' => $id];
+        return null;
     }
 
     /**
