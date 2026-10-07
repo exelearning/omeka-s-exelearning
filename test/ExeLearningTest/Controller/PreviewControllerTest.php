@@ -34,9 +34,9 @@ class PreviewControllerTest extends TestCase
 
     /**
      * BYTE-IDENTICAL expected value of PreviewController::PREVIEW_SANDBOX_CSP:
-     * eXe core previewCspHeader() (src/shared/security/previewSandbox.ts) plus
-     * `allow-downloads` and `worker-src 'self' blob:` (ADR-63-01). Kept as an independent literal so
-     * a silent reformat/reorder of the controller constant fails this test.
+     * the eXe opaque-preview CSP (previewCspHeader(), exelearning/exelearning#1968)
+     * plus `allow-downloads` and `worker-src 'self' blob:` (ADR-63-01). Kept as
+     * an independent literal so a silent reformat/reorder of the controller constant fails this test.
      */
     private const EXPECTED_CSP =
         "sandbox allow-scripts allow-popups allow-forms allow-downloads; "

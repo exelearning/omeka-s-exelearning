@@ -30,10 +30,12 @@ use Laminas\Mvc\Controller\AbstractActionController;
  * other file is no-cache + ETag/Range/304. The sandbox-first CSP is emitted on
  * EVERY scriptable document type.
  *
- * IMPORTANT: self::PREVIEW_SANDBOX_CSP is eXe core's previewCspHeader()
- * (src/shared/security/previewSandbox.ts) plus exactly two additions, the same
- * ones mod_exelearning makes: `allow-downloads` in the sandbox and
- * `worker-src 'self' blob:`. Together they let the previewed package's own
+ * IMPORTANT: self::PREVIEW_SANDBOX_CSP is the sandbox-first CSP from eXe's
+ * opaque-preview work (previewCspHeader(), exelearning/exelearning#1968) plus
+ * exactly two additions, the same ones mod_exelearning makes: `allow-downloads`
+ * in the sandbox and `worker-src 'self' blob:`. Core's current preview
+ * (previewSnapshotCspHeader(), #2199) sends only a `sandbox` directive whose
+ * tokens already include allow-downloads, so it needs neither addition. Together they let the previewed package's own
  * "Download .elpx" button rebuild and save the file (fflate compresses in blob:
  * workers; without worker-src the child-src fallback blocks them), see
  * ADR-63-01 and exelearning/exelearning#2488. Do not reformat, reorder, or
@@ -50,8 +52,9 @@ class PreviewController extends AbstractActionController
     /**
      * Sandbox-first CSP, emitted VERBATIM on every scriptable document type so
      * the preview stays opaque even when the capability URL is opened top-level
-     * (new tab / popup / raw URL). eXe core previewCspHeader() plus the two
-     * download additions documented above; kept as a single literal so it can never drift via array/implode edits.
+     * (new tab / popup / raw URL). The #1968 CSP plus the two download
+     * additions documented above; kept as a single literal so it can never
+     * drift via array/implode edits.
      */
     private const PREVIEW_SANDBOX_CSP =
         "sandbox allow-scripts allow-popups allow-forms allow-downloads; "
