@@ -314,6 +314,12 @@ class ContentControllerTest extends TestCase
         // Referrer-Policy: no-referrer (PDFs/CSS no longer leak the referrer).
         $this->assertNotNull($headers->get('Referrer-Policy'));
         $this->assertEquals('no-referrer', $headers->get('Referrer-Policy')->getFieldValue());
+
+        // The opaque package fetch()es its own files (the .elpx download rebuild);
+        // from a null origin that is cross-origin, so every file allows any reader.
+        $this->assertNotNull($headers->get('Access-Control-Allow-Origin'));
+        $this->assertEquals('*', $headers->get('Access-Control-Allow-Origin')->getFieldValue());
+        $this->assertNull($headers->get('Access-Control-Allow-Credentials'));
     }
 
     public function testAddSecurityHeadersForCss(): void

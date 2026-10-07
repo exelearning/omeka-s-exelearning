@@ -159,6 +159,12 @@ class ContentController extends AbstractActionController
         // host on any subresource it loads, not just the HTML document.
         if (\ExeLearning\Service\IframeSandbox::MODE_SECURE === $this->iframeMode) {
             $headers->addHeaderLine('Referrer-Policy', 'no-referrer');
+            // The opaque (null-origin) package reads its own files with fetch(), e.g. the
+            // download-source-file button rebuilding the .elpx; to the browser every such
+            // request is cross-origin and fails without this. Safe on this route: the hash
+            // is the only credential, no cookie is ever required, and `*` never pairs with
+            // credentials, so other origins can read only what an anonymous GET returns.
+            $headers->addHeaderLine('Access-Control-Allow-Origin', '*');
         }
 
         // For HTML content, add strict Content-Security-Policy
