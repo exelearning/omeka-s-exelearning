@@ -2,8 +2,10 @@
 #
 # `make package` copies the tree with `rsync --exclude-from=.distignore`, so
 # these are rsync patterns: a leading slash anchors to the package root, and an
-# unanchored rule matches at any depth (which is why `test/` also removes a
-# nested test directory, wherever it turns up).
+# unanchored rule matches at any depth. Anchor every directory rule: the editor
+# under dist/static/ has its own themes/ and vendor/ folders (built-in styles,
+# the TinyMCE theme, the SCORM 1.2 runtime), and an unanchored `themes/` once
+# shipped packages whose editor previews and screenshots had no style.
 #
 # The bundled editor under dist/static/ is a release artifact and must stay in
 # the package -- see ADR-28-01. Do not add a `dist` rule here.
@@ -26,11 +28,16 @@
 .claude
 AGENTS.md
 CLAUDE.md
+# rsync matches names case-sensitively, and the pointer was once tracked as
+# claude.md; a macOS checkout can keep that spelling on disk after the rename.
+claude.md
 
 # Editor and local tooling leftovers
 .aider*
 .DS_Store
 .env
+.env.dist
+.playwright-mcp
 node_modules
 
 # Build inputs. Only the built editor in dist/static/ ships; the editor
@@ -38,18 +45,20 @@ node_modules
 # (see the header comment); asset/css, asset/js and asset/thumbnails do ship.
 /exelearning/
 /asset/static
-vendor/
-themes/
+/vendor/
+/themes/
 
 # Tests, their caches, and the coverage reports they write
-test/
-test/.phpunit.result.cache
-test/.phpunit.cache/
-artifacts/
+/test/
+/test/.phpunit.result.cache
+/test/.phpunit.cache/
+/artifacts/
 
 # Development tooling and configuration. scripts/ holds the architecture-record
 # validator: a documentation linter, not module code.
-scripts/
+/scripts/
+/architecture-records.json
+/.editor-version
 phpmd.xml
 codecov.yml
 Makefile
@@ -60,8 +69,22 @@ composer.lock
 blueprint.json
 renovate.json
 
-# Repository documentation. docs/ holds the architecture records, not user docs.
-docs/
+# Development data for `make up`/`make seed` and the Playground blueprint (which
+# fetches the fixture from GitHub, not from the package). data/ itself ships:
+# data/nginx-exelearning.conf is the server snippet the README tells admins to use.
+/data/fixtures/
+/data/*.csv
+/data/seed-exelearning.sh
+
+# Translation sources. Omeka loads language/*.mo only (config/module.config.php).
+/language/*.po
+/language/*.pot
+
+# Repository documentation and local analysis. docs/ holds the architecture
+# records, not user docs.
+/docs/
+/analysis/
+/legacy/
 
 # Packaging output
 *.zip

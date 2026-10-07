@@ -160,6 +160,10 @@ class ExeLearningRenderer implements FileRendererInterface, MediaRendererInterfa
         // restores allow-same-origin only where an opaque iframe cannot be
         // served (the php-wasm Playground, whose service worker only intercepts
         // same-origin documents).
+        //
+        // Both modes carry `allow-downloads` so the package's own "Download
+        // .elpx" button (download-source-file iDevice) can save the file it
+        // builds. See ADR-63-01.
         $html .= '<iframe ';
         $html .= 'id="' . $iframeId . '" ';
         $html .= 'data-exe-content-path="' . $view->escapeHtmlAttr($contentPath) . '" ';

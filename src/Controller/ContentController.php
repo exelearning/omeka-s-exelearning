@@ -185,6 +185,11 @@ class ContentController extends AbstractActionController
             $directives = [
                 "default-src 'self'",
                 $scriptSrc,
+                // The package's download-source-file button rebuilds the .elpx
+                // with fflate, which compresses in blob: workers. Scripts here
+                // already run with 'unsafe-inline'/'unsafe-eval', so this adds
+                // no capability (ADR-63-01).
+                "worker-src 'self' blob:",
                 "style-src 'self' 'unsafe-inline'",
                 $imgSrc,
                 $mediaSrc,
@@ -203,8 +208,10 @@ class ContentController extends AbstractActionController
             // popups + forms, no same-origin. allow-forms lets the form-based iDevices submit
             // inside the opaque sandbox; a CSP sandbox without it would block submission even
             // though the iframe attribute permits it (the effective sandbox is the intersection).
+            // allow-downloads likewise has to be here too, or the package's .elpx download
+            // button is dropped (ADR-63-01).
             if (\ExeLearning\Service\IframeSandbox::MODE_SECURE === $this->iframeMode) {
-                $directives[] = 'sandbox allow-scripts allow-popups allow-forms';
+                $directives[] = 'sandbox allow-scripts allow-popups allow-forms allow-downloads';
             }
             $headers->addHeaderLine('Content-Security-Policy', implode('; ', $directives));
 

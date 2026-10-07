@@ -24,6 +24,8 @@ class IframeSandboxTest extends TestCase
         $this->assertStringContainsString('allow-popups', $tokens);
         // allow-forms is required so the form-based iDevices can submit in the sandbox.
         $this->assertStringContainsString('allow-forms', $tokens);
+        // allow-downloads lets the package's .elpx download button save its file (ADR-63-01).
+        $this->assertStringContainsString('allow-downloads', $tokens);
     }
 
     public function testLegacyOptionIsIgnoredWithoutEscapeHatch(): void

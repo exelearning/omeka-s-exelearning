@@ -46,12 +46,15 @@ final class IframeSandbox
      * an unsandboxed, same-origin window that would run author JS as Omeka. allow-forms
      * is required so the form-based eXeLearning iDevices can submit inside the sandbox;
      * it is orthogonal to allow-same-origin and does not weaken isolation. Aligned with
-     * mod_exelearning's canonical token set (DEC-0059/DEC-0062).
+     * mod_exelearning's canonical token set (DEC-0059/DEC-0062). allow-downloads lets the
+     * package's own .elpx download button save the file it builds (ADR-63-01); it grants
+     * no access to the Omeka origin.
      */
-    private const SECURE_TOKENS = 'allow-scripts allow-popups allow-forms';
+    private const SECURE_TOKENS = 'allow-scripts allow-popups allow-forms allow-downloads';
 
     /** Legacy tokens: the previous same-origin behaviour, only via the dev-only escape hatch. */
-    private const LEGACY_TOKENS = 'allow-same-origin allow-scripts allow-popups allow-forms allow-popups-to-escape-sandbox';
+    private const LEGACY_TOKENS = 'allow-same-origin allow-scripts allow-popups allow-forms allow-popups-to-escape-sandbox'
+        . ' allow-downloads';
 
     /** Strict CSP profile (default): no bare https: token-exfiltration channels. */
     public const CSP_STRICT = 'strict';

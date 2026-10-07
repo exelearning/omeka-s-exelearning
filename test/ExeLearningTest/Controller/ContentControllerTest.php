@@ -345,6 +345,9 @@ class ContentControllerTest extends TestCase
         $this->assertStringContainsString("script-src 'self' 'unsafe-inline' 'unsafe-eval'", $csp);
         $this->assertStringContainsString("style-src 'self' 'unsafe-inline'", $csp);
         $this->assertStringContainsString("img-src 'self' data: blob:", $csp);
+        // fflate, used by the package's download-source-file button to rebuild
+        // the .elpx, compresses in blob: workers (ADR-63-01).
+        $this->assertStringContainsString("worker-src 'self' blob:", $csp);
         $this->assertStringContainsString("frame-ancestors 'self'", $csp);
         $this->assertStringContainsString("form-action 'none'", $csp);
         // Strict (default): no bare https: channels (so the served URL cannot be exfiltrated);
@@ -363,7 +366,7 @@ class ContentControllerTest extends TestCase
         // The response-level sandbox keeps the document opaque even if opened outside
         // the iframe (new tab / escaped popup / raw URL navigation). It mirrors the
         // secure iframe tokens incl. allow-forms so iDevice forms submit.
-        $this->assertStringContainsString('sandbox allow-scripts allow-popups allow-forms', $csp);
+        $this->assertStringContainsString('sandbox allow-scripts allow-popups allow-forms allow-downloads', $csp);
     }
 
     public function testLegacyModeArgIsIgnoredStillSandboxed(): void
@@ -375,7 +378,7 @@ class ContentControllerTest extends TestCase
         $this->callProtectedMethod($controller, 'addSecurityHeaders', [$headers, 'text/html']);
 
         $csp = $headers->get('Content-Security-Policy')->getFieldValue();
-        $this->assertStringContainsString('sandbox allow-scripts allow-popups allow-forms', $csp);
+        $this->assertStringContainsString('sandbox allow-scripts allow-popups allow-forms allow-downloads', $csp);
         $this->assertStringContainsString("default-src 'self'", $csp);
     }
 
