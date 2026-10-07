@@ -33,13 +33,13 @@ class PreviewControllerTest extends TestCase
     private const PHOTO_KEY = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeffff0000@9c41d2e8a1b03f57';
 
     /**
-     * BYTE-IDENTICAL expected value of PreviewController::PREVIEW_SANDBOX_CSP,
-     * itself a copy of eXe core previewCspHeader()
-     * (src/shared/security/previewSandbox.ts). Kept as an independent literal so
+     * BYTE-IDENTICAL expected value of PreviewController::PREVIEW_SANDBOX_CSP:
+     * eXe core previewCspHeader() (src/shared/security/previewSandbox.ts) plus
+     * `allow-downloads` and `worker-src 'self' blob:` (ADR-63-01). Kept as an independent literal so
      * a silent reformat/reorder of the controller constant fails this test.
      */
     private const EXPECTED_CSP =
-        "sandbox allow-scripts allow-popups allow-forms; "
+        "sandbox allow-scripts allow-popups allow-forms allow-downloads; "
         . "default-src 'self'; "
         . "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
         . "style-src 'self' 'unsafe-inline'; "
@@ -47,6 +47,7 @@ class PreviewControllerTest extends TestCase
         . "media-src 'self' data: blob: https:; "
         . "font-src 'self' data:; "
         . "connect-src 'self'; "
+        . "worker-src 'self' blob:; "
         . "frame-src 'self' https://www.youtube-nocookie.com https://player.vimeo.com; "
         . "child-src 'self' https://www.youtube-nocookie.com https://player.vimeo.com; "
         . "object-src 'none'; "

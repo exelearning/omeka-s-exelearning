@@ -30,9 +30,14 @@ use Laminas\Mvc\Controller\AbstractActionController;
  * other file is no-cache + ETag/Range/304. The sandbox-first CSP is emitted on
  * EVERY scriptable document type.
  *
- * IMPORTANT: self::PREVIEW_SANDBOX_CSP MUST stay BYTE-IDENTICAL to eXe core's
- * previewCspHeader() (src/shared/security/previewSandbox.ts). Do not reformat,
- * reorder, or "profile" it; the drift check in PreviewControllerTest asserts it.
+ * IMPORTANT: self::PREVIEW_SANDBOX_CSP is eXe core's previewCspHeader()
+ * (src/shared/security/previewSandbox.ts) plus exactly two additions, the same
+ * ones mod_exelearning makes: `allow-downloads` in the sandbox and
+ * `worker-src 'self' blob:`. Together they let the previewed package's own
+ * "Download .elpx" button rebuild and save the file (fflate compresses in blob:
+ * workers; without worker-src the child-src fallback blocks them), see
+ * ADR-63-01 and exelearning/exelearning#2488. Do not reformat, reorder, or
+ * "profile" it otherwise; the drift check in PreviewControllerTest asserts it.
  *
  * @license AGPL-3.0
  */
@@ -45,11 +50,11 @@ class PreviewController extends AbstractActionController
     /**
      * Sandbox-first CSP, emitted VERBATIM on every scriptable document type so
      * the preview stays opaque even when the capability URL is opened top-level
-     * (new tab / popup / raw URL). BYTE-IDENTICAL to eXe core previewCspHeader();
-     * kept as a single literal so it can never drift via array/implode edits.
+     * (new tab / popup / raw URL). eXe core previewCspHeader() plus the two
+     * download additions documented above; kept as a single literal so it can never drift via array/implode edits.
      */
     private const PREVIEW_SANDBOX_CSP =
-        "sandbox allow-scripts allow-popups allow-forms; "
+        "sandbox allow-scripts allow-popups allow-forms allow-downloads; "
         . "default-src 'self'; "
         . "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
         . "style-src 'self' 'unsafe-inline'; "
@@ -57,6 +62,7 @@ class PreviewController extends AbstractActionController
         . "media-src 'self' data: blob: https:; "
         . "font-src 'self' data:; "
         . "connect-src 'self'; "
+        . "worker-src 'self' blob:; "
         . "frame-src 'self' https://www.youtube-nocookie.com https://player.vimeo.com; "
         . "child-src 'self' https://www.youtube-nocookie.com https://player.vimeo.com; "
         . "object-src 'none'; "

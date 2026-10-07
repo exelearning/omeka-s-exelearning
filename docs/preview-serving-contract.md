@@ -76,7 +76,11 @@ deliberately no `X-Frame-Options`: framing is governed by the CSP
 `frame-ancestors` directive.
 
 Every **scriptable** type — `text/html`, `image/svg+xml`, XML, XHTML — also gets
-the sandbox CSP, so a capability URL stays opaque even when opened directly. Not
+the sandbox CSP, so a capability URL stays opaque even when opened directly.
+That CSP is eXe core's `previewCspHeader()` plus `allow-downloads` and
+`worker-src 'self' blob:`, so the previewed package's own "Download .elpx"
+button can rebuild the file in fflate's `blob:` workers and save it
+(ADR-63-01, exelearning/exelearning#2488). Not
 just HTML: an author-supplied SVG runs its inline `<script>` top-level, and
 `nosniff` does not help — SVG is already a scriptable type.
 
