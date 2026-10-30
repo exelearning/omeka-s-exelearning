@@ -28,7 +28,7 @@
   ],
   "files": [
     {
-      "source": "https://github.com/exelearning/exelearning/releases/download/v4.0.5/exelearning-static-v4.0.5.zip",
+      "source": "https://github.com/exelearning/exelearning/releases/download/v4.0.6/exelearning-static-v4.0.6.zip",
       "destination": "modules/ExeLearning/dist/static",
       "extract": true
     }
