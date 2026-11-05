@@ -11,6 +11,7 @@ use ExeLearning\Service\ElpFileService;
 use ExeLearning\Service\DownloadFormats;
 use ExeLearning\Service\EditorBundle;
 use ExeLearning\Service\EditPermission;
+use ExeLearning\Service\IframeSandbox;
 
 /**
  * Renderer for eXeLearning files.
@@ -87,6 +88,15 @@ class ExeLearningRenderer implements FileRendererInterface, MediaRendererInterfa
             $view->assetUrl('js/exelearning-viewer.js', 'ExeLearning')
         );
 
+        // In secure mode the content is opaque, so external embeds are promoted to this
+        // page (no-op in legacy, where they already work inline). The embed policy
+        // (open default | strict) mirrors mod_exelearning's embedmode setting (DEC-0061).
+        IframeSandbox::enqueueEmbedRelay($view, $config['iframe_mode'], $config['embed_mode']);
+
+        // Parent-side media host for the interactive-video iDevice in secure mode (DEC-0067):
+        // completes the window.exeMediaBridge handshake and plays the provider video in a
+        // modal via raw postMessage (no third-party SDK on this page). No-op in legacy.
+
         // Enqueue the download orchestrator only when the multi-format
         // button will actually be rendered.
         $downloadFormatIds = $this->getEnabledDownloadFormats($view);
@@ -144,34 +154,22 @@ class ExeLearningRenderer implements FileRendererInterface, MediaRendererInterfa
         // Iframe — src is set by inline JS so the playground SW scope prefix
         // from window.location is correctly prepended to the content path.
         //
-        // TEMPORARY, and not a security boundary. `allow-same-origin` together
-        // with `allow-scripts` on content served from the Omeka origin means
-        // package JavaScript runs *as* that origin: it can reach the session
-        // cookie and issue same-origin requests as whoever is viewing. ZipSafety
-        // guards what may be extracted and the content proxy's CSP is
-        // defence-in-depth, but neither contains this.
+        // Sandbox tokens come from the iframe-mode setting (default secure).
+        // Secure = opaque origin (no allow-same-origin): package HTML/JS cannot
+        // reach the Omeka page, its cookies or its DOM (ADR-39-02). Legacy
+        // restores allow-same-origin only where an opaque iframe cannot be
+        // served (the php-wasm Playground, whose service worker only intercepts
+        // same-origin documents).
         //
-        // The value is kept because it is what every executing code path
-        // emitted before the renderer became reachable, so this change alters
-        // registration without also altering the security posture, and because
-        // dropping the flag alone does not harden anything — under
-        // `default-src 'self'` an opaque origin cannot load the package's own
-        // assets, so the viewer would simply break.
-        //
-        // PR #21 (feature/secure-iframe-sandbox) replaces this with an
-        // opaque-origin viewer and owns the fix. See ADR-39-02.
-        //
-        // `allow-downloads` lets the package's own "Download .elpx" button
-        // (download-source-file iDevice) save the file it builds; without it
-        // the browser drops the download. It grants nothing a same-origin
-        // frame could not already do, and is what an opaque frame will need.
-        // See ADR-63-01.
+        // Both modes carry `allow-downloads` so the package's own "Download
+        // .elpx" button (download-source-file iDevice) can save the file it
+        // builds. See ADR-63-01.
         $html .= '<iframe ';
         $html .= 'id="' . $iframeId . '" ';
         $html .= 'data-exe-content-path="' . $view->escapeHtmlAttr($contentPath) . '" ';
         $html .= 'class="exelearning-iframe" ';
         $html .= 'style="width: 100%; height: ' . (int) $config['height'] . 'px; border: none;" ';
-        $html .= 'sandbox="allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox allow-downloads" ';
+        $html .= 'sandbox="' . IframeSandbox::tokens($config['iframe_mode']) . '" ';
         $html .= 'referrerpolicy="no-referrer" ';
         $html .= 'allowfullscreen>';
         $html .= '</iframe>';
@@ -336,14 +334,21 @@ class ExeLearningRenderer implements FileRendererInterface, MediaRendererInterfa
     {
         $defaults = [
             'height' => 600,
+            'iframe_mode' => IframeSandbox::MODE_SECURE,
+            'embed_mode' => IframeSandbox::EMBED_STRICT,
         ];
 
         try {
             $setting = $view->getHelperPluginManager()->get('setting');
             return [
                 'height' => $setting('exelearning_viewer_height', $defaults['height']),
+                'iframe_mode' => IframeSandbox::normalizeMode(
+                    $setting('exelearning_iframe_mode', $defaults['iframe_mode'])
+                ),
+                // Raw setting value; IframeSandbox::embedMode() resolves it (strict default).
+                'embed_mode' => $setting(IframeSandbox::EMBED_OPTION, IframeSandbox::EMBED_STRICT),
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             return $defaults;
         }
     }
