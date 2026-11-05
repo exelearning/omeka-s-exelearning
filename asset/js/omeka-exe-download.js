@@ -58,7 +58,11 @@
             var readyHandler = function(event) {
                 if (event.source !== iframeEl.contentWindow) return;
                 var data = event.data || {};
-                if (data.type === 'DOCUMENT_LOADED' || data.type === 'exelearning-bridge-ready') {
+                // Only the bridge's own signal is safe: it is posted right
+                // before the bridge starts listening for OMEKA_REQUEST_EXPORT.
+                // The editor emits DOCUMENT_LOADED earlier, while the .elpx is
+                // still importing, and an export requested then is dropped.
+                if (data.type === 'exelearning-bridge-ready') {
                     iframeReady = true;
                     window.removeEventListener('message', readyHandler);
                     resolve();
