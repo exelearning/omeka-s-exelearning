@@ -208,6 +208,15 @@
                 await bridge.importFromElpx(file, { clearExisting: true });
             }
 
+            // The import only fills the Yjs document. The Properties form was
+            // already rendered for the blank project, so author, subtitle and
+            // the export options kept their defaults on screen and were written
+            // back on the next save. Refresh the UI from Yjs, as the editor's
+            // own OPEN_FILE handler does after a direct import.
+            if (typeof project?.refreshAfterDirectImport === 'function') {
+                await project.refreshAfterDirectImport();
+            }
+
             console.log('[Omeka-EXE Bridge] ELP imported successfully');
         } catch (error) {
             console.error('[Omeka-EXE Bridge] Import failed:', error);
