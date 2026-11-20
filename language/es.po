@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ExeLearning\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-28 10:44+0100\n"
+"POT-Creation-Date: 2026-09-28 12:08+0100\n"
 "PO-Revision-Date: 2026-01-12 17:00+0000\n"
 "Last-Translator: Área de Tecnología Educativa <ate@gobiernodecanarias.org>\n"
 "Language-Team: Spanish\n"
@@ -12,15 +12,15 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: Module.php:465
+#: Module.php:466
 msgid "Teacher Mode"
 msgstr "Modo docente"
 
-#: Module.php:466
+#: Module.php:467
 msgid "Show teacher layer selector"
 msgstr "Mostrar el selector de la capa docente"
 
-#: Module.php:467
+#: Module.php:468
 msgid ""
 "If disabled, the teacher layer selector is hidden in the embedded "
 "eXeLearning content."
@@ -28,19 +28,19 @@ msgstr ""
 "Si se desactiva, el selector de la capa docente se oculta en el contenido de "
 "eXeLearning incrustado."
 
-#: Module.php:836
+#: Module.php:843
 msgid "Styles"
 msgstr "Estilos"
 
-#: Module.php:838
+#: Module.php:845
 msgid "Style management"
 msgstr "Gestión de estilos"
 
-#: Module.php:841
+#: Module.php:848
 msgid "Open styles page"
 msgstr "Abrir página de estilos"
 
-#: Module.php:845
+#: Module.php:852
 msgid ""
 "Upload eXeLearning style packages, enable/disable built-in styles, and "
 "control the \"Block user-imported styles\" policy from a dedicated page."
@@ -49,11 +49,11 @@ msgstr ""
 "integrados y controla la política «Bloquear estilos importados por el "
 "usuario» desde una página dedicada."
 
-#: Module.php:875
+#: Module.php:882
 msgid "Embedded Editor"
 msgstr "Editor integrado"
 
-#: Module.php:879 src/Controller/EditorController.php:80
+#: Module.php:886 src/Controller/EditorController.php:80
 msgid ""
 "This installation does not include the embedded editor, so editing "
 "eXeLearning content is disabled. Official release packages include it; "
@@ -223,32 +223,32 @@ msgid "Save to Omeka"
 msgstr "Guardar en Omeka"
 
 #: src/Controller/EditorController.php:114
-#: src/Controller/EditorController.php:258
+#: src/Controller/EditorController.php:291
 msgid "Loading project..."
 msgstr "Cargando proyecto..."
 
 #: src/Controller/EditorController.php:115
-#: src/Controller/EditorController.php:259
+#: src/Controller/EditorController.php:292
 msgid "Waiting for editor..."
 msgstr "Esperando al editor..."
 
 #: src/Controller/EditorController.php:116
-#: src/Controller/EditorController.php:260
+#: src/Controller/EditorController.php:293
 msgid "Downloading file..."
 msgstr "Descargando archivo..."
 
 #: src/Controller/EditorController.php:117
-#: src/Controller/EditorController.php:261
+#: src/Controller/EditorController.php:294
 msgid "Importing content..."
 msgstr "Importando contenido..."
 
 #: src/Controller/EditorController.php:118
-#: src/Controller/EditorController.php:262
+#: src/Controller/EditorController.php:295
 msgid "Error loading project"
 msgstr "Error al cargar el proyecto"
 
 #: src/Controller/EditorController.php:119
-#: src/Controller/EditorController.php:263
+#: src/Controller/EditorController.php:296
 msgid "Error"
 msgstr "Error"
 
@@ -287,11 +287,11 @@ msgstr ""
 "Este formato requiere el editor integrado, que no está incluido en esta "
 "instalación."
 
-#: src/Media/FileRenderer/ExeLearningRenderer.php:123
+#: src/Media/FileRenderer/ExeLearningRenderer.php:133
 msgid "Open in new window"
 msgstr "Abrir en una ventana nueva"
 
-#: src/Media/FileRenderer/ExeLearningRenderer.php:130
+#: src/Media/FileRenderer/ExeLearningRenderer.php:140
 msgid "Fullscreen"
 msgstr "Pantalla completa"
 
@@ -344,11 +344,39 @@ msgstr ""
 "el que esté publicado el ítem. En la página del medio del administrador se "
 "muestra siempre."
 
-#: src/Form/ConfigForm.php:61
+#: src/Form/ConfigForm.php:56
+msgid "External embed policy"
+msgstr "Política de contenido externo incrustado"
+
+#: src/Form/ConfigForm.php:57
+msgid ""
+"Strict (recommended): only a maintained provider allowlist (YouTube, Vimeo, "
+"Dailymotion, EducaMadrid) with per-provider URL reconstruction; use it where "
+"the author is not fully trusted. Open: any cross-origin https iframe is "
+"promoted to this page and rendered sandboxed, so it is isolated by the same-"
+"origin policy regardless of host. Mirrors mod_exelearning's embedmode "
+"setting."
+msgstr ""
+"Estricta (recomendada): solo una lista mantenida de proveedores permitidos "
+"(YouTube, Vimeo, Dailymotion, EducaMadrid) con reconstrucción de la URL para "
+"cada proveedor; úsela cuando el autor no sea de total confianza. Abierta: "
+"cualquier iframe https de otro origen se traslada a esta página y se muestra "
+"aislado (sandbox), de modo que la política de mismo origen lo aísla sea cual "
+"sea el servidor. Equivale al ajuste embedmode de mod_exelearning."
+
+#: src/Form/ConfigForm.php:59
+msgid "Strict (provider allowlist)"
+msgstr "Estricta (lista de proveedores permitidos)"
+
+#: src/Form/ConfigForm.php:60
+msgid "Open (any cross-origin https embed)"
+msgstr "Abierta (cualquier contenido https de otro origen)"
+
+#: src/Form/ConfigForm.php:83
 msgid "Download formats"
 msgstr "Formatos de descarga"
 
-#: src/Form/ConfigForm.php:62
+#: src/Form/ConfigForm.php:84
 msgid ""
 "Formats offered by the download split-button on embedded eXeLearning "
 "content. Non-source formats are produced client-side by the editor exporters "
@@ -394,4 +422,3 @@ msgstr "Paquete IMS"
 #: src/Service/DownloadFormats.php:50
 msgid "EPUB3"
 msgstr "EPUB3"
-

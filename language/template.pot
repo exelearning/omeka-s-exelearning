@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-28 10:44+0100\n"
+"POT-Creation-Date: 2026-09-28 12:08+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,43 +17,43 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: Module.php:465
+#: Module.php:466
 msgid "Teacher Mode"
 msgstr ""
 
-#: Module.php:466
+#: Module.php:467
 msgid "Show teacher layer selector"
 msgstr ""
 
-#: Module.php:467
+#: Module.php:468
 msgid ""
 "If disabled, the teacher layer selector is hidden in the embedded "
 "eXeLearning content."
 msgstr ""
 
-#: Module.php:836
+#: Module.php:843
 msgid "Styles"
 msgstr ""
 
-#: Module.php:838
+#: Module.php:845
 msgid "Style management"
 msgstr ""
 
-#: Module.php:841
+#: Module.php:848
 msgid "Open styles page"
 msgstr ""
 
-#: Module.php:845
+#: Module.php:852
 msgid ""
 "Upload eXeLearning style packages, enable/disable built-in styles, and "
 "control the \"Block user-imported styles\" policy from a dedicated page."
 msgstr ""
 
-#: Module.php:875
+#: Module.php:882
 msgid "Embedded Editor"
 msgstr ""
 
-#: Module.php:879 src/Controller/EditorController.php:80
+#: Module.php:886 src/Controller/EditorController.php:80
 msgid ""
 "This installation does not include the embedded editor, so editing "
 "eXeLearning content is disabled. Official release packages include it; "
@@ -206,32 +206,32 @@ msgid "Save to Omeka"
 msgstr ""
 
 #: src/Controller/EditorController.php:114
-#: src/Controller/EditorController.php:258
+#: src/Controller/EditorController.php:291
 msgid "Loading project..."
 msgstr ""
 
 #: src/Controller/EditorController.php:115
-#: src/Controller/EditorController.php:259
+#: src/Controller/EditorController.php:292
 msgid "Waiting for editor..."
 msgstr ""
 
 #: src/Controller/EditorController.php:116
-#: src/Controller/EditorController.php:260
+#: src/Controller/EditorController.php:293
 msgid "Downloading file..."
 msgstr ""
 
 #: src/Controller/EditorController.php:117
-#: src/Controller/EditorController.php:261
+#: src/Controller/EditorController.php:294
 msgid "Importing content..."
 msgstr ""
 
 #: src/Controller/EditorController.php:118
-#: src/Controller/EditorController.php:262
+#: src/Controller/EditorController.php:295
 msgid "Error loading project"
 msgstr ""
 
 #: src/Controller/EditorController.php:119
-#: src/Controller/EditorController.php:263
+#: src/Controller/EditorController.php:296
 msgid "Error"
 msgstr ""
 
@@ -268,11 +268,11 @@ msgid ""
 "installation."
 msgstr ""
 
-#: src/Media/FileRenderer/ExeLearningRenderer.php:123
+#: src/Media/FileRenderer/ExeLearningRenderer.php:133
 msgid "Open in new window"
 msgstr ""
 
-#: src/Media/FileRenderer/ExeLearningRenderer.php:130
+#: src/Media/FileRenderer/ExeLearningRenderer.php:140
 msgid "Fullscreen"
 msgstr ""
 
@@ -320,11 +320,33 @@ msgid ""
 "page."
 msgstr ""
 
-#: src/Form/ConfigForm.php:61
+#: src/Form/ConfigForm.php:56
+msgid "External embed policy"
+msgstr ""
+
+#: src/Form/ConfigForm.php:57
+msgid ""
+"Strict (recommended): only a maintained provider allowlist (YouTube, Vimeo, "
+"Dailymotion, EducaMadrid) with per-provider URL reconstruction; use it where "
+"the author is not fully trusted. Open: any cross-origin https iframe is "
+"promoted to this page and rendered sandboxed, so it is isolated by the same-"
+"origin policy regardless of host. Mirrors mod_exelearning's embedmode "
+"setting."
+msgstr ""
+
+#: src/Form/ConfigForm.php:59
+msgid "Strict (provider allowlist)"
+msgstr ""
+
+#: src/Form/ConfigForm.php:60
+msgid "Open (any cross-origin https embed)"
+msgstr ""
+
+#: src/Form/ConfigForm.php:83
 msgid "Download formats"
 msgstr ""
 
-#: src/Form/ConfigForm.php:62
+#: src/Form/ConfigForm.php:84
 msgid ""
 "Formats offered by the download split-button on embedded eXeLearning "
 "content. Non-source formats are produced client-side by the editor exporters "
