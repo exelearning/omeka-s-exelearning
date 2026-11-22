@@ -327,6 +327,52 @@ class ContentControllerTest extends TestCase
         $this->assertNull($headers->get('Content-Security-Policy'));
     }
 
+    /**
+     * @return array<string, string[]> Sources of the HTML policy keyed by directive.
+     */
+    private function htmlCspDirectives(): array
+    {
+        $headers = new \Laminas\Http\Headers();
+        $this->callProtectedMethod($this->controller, 'addSecurityHeaders', [$headers, 'text/html']);
+
+        $directives = [];
+        foreach (explode('; ', $headers->get('Content-Security-Policy')->getFieldValue()) as $directive) {
+            $sources = explode(' ', $directive);
+            $directives[array_shift($sources)] = $sources;
+        }
+        return $directives;
+    }
+
+    public function testCspAllowsIdevicePlayerScriptsAndEmbeds(): void
+    {
+        $directives = $this->htmlCspDirectives();
+
+        // The interactive video iDevices load their player API from these origins.
+        foreach ([
+            'https://www.youtube.com',
+            'https://www.youtube-nocookie.com',
+            'https://youtu.be',
+            'https://player.vimeo.com',
+            'https://mediateca.educa.madrid.org',
+            'https://cdn.jsdelivr.net',
+        ] as $origin) {
+            $this->assertContains($origin, $directives['script-src']);
+        }
+        // The players then embed a frame, show a poster and stream media.
+        $this->assertContains('https:', $directives['frame-src']);
+        $this->assertContains('https:', $directives['img-src']);
+        $this->assertContains('https:', $directives['media-src']);
+    }
+
+    public function testCspKeepsScriptsAndConnectionsRestricted(): void
+    {
+        $directives = $this->htmlCspDirectives();
+
+        $this->assertNotContains('https:', $directives['script-src']);
+        $this->assertNotContains('*', $directives['script-src']);
+        $this->assertSame(["'self'"], $directives['connect-src']);
+    }
+
     public function testCspContainsRequiredDirectives(): void
     {
         $headers = new \Laminas\Http\Headers();
@@ -337,7 +383,7 @@ class ContentControllerTest extends TestCase
         $this->assertStringContainsString("default-src 'self'", $csp);
         $this->assertStringContainsString("script-src 'self' 'unsafe-inline' 'unsafe-eval'", $csp);
         $this->assertStringContainsString("style-src 'self' 'unsafe-inline'", $csp);
-        $this->assertStringContainsString("img-src 'self' data: blob:", $csp);
+        $this->assertStringContainsString("img-src 'self' data: blob: https:", $csp);
         // fflate, used by the package's download-source-file button to rebuild
         // the .elpx, compresses in blob: workers (ADR-63-01).
         $this->assertStringContainsString("worker-src 'self' blob:", $csp);
