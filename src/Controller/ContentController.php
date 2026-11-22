@@ -16,6 +16,23 @@ use Laminas\Http\Response as HttpResponse;
  */
 class ContentController extends AbstractActionController
 {
+    /**
+     * Remote origins whose scripts package HTML may load: the players and
+     * export helpers that eXeLearning's own iDevices pull in at runtime (the
+     * YouTube IFrame API, the Vimeo player API, the EducaMadrid Mediateca
+     * player, and html2canvas/jspdf from jsDelivr). Every other script must
+     * ship inside the package.
+     */
+    private const SCRIPT_ORIGINS = [
+        'https://www.youtube.com',
+        'https://www.youtube-nocookie.com',
+        'https://youtu.be',
+        'https://s.ytimg.com',
+        'https://player.vimeo.com',
+        'https://mediateca.educa.madrid.org',
+        'https://cdn.jsdelivr.net',
+    ];
+
     /** @var string */
     protected $basePath;
 
@@ -148,23 +165,24 @@ class ContentController extends AbstractActionController
         if (strpos($mimeType, 'text/html') !== false) {
             // CSP that:
             // - Allows inline styles and scripts (needed for eXeLearning content)
-            // - Restricts where content can be loaded from
-            // - Prevents the content from framing other sites
-            // - Allows images/media from same origin and data URIs
+            // - Allows passive remote content (images, media, embeds) over
+            //   https, because authors routinely link externally hosted assets
+            // - Limits remote code to SCRIPT_ORIGINS and keeps connect-src
+            //   'self', so package scripts cannot call out
             $csp = implode('; ', [
                 "default-src 'self'",
-                "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval' " . implode(' ', self::SCRIPT_ORIGINS),
                 // The package's download-source-file button rebuilds the .elpx
                 // with fflate, which compresses in blob: workers. Scripts here
                 // already run with 'unsafe-inline'/'unsafe-eval', so this adds
                 // no capability (ADR-63-01).
                 "worker-src 'self' blob:",
                 "style-src 'self' 'unsafe-inline'",
-                "img-src 'self' data: blob:",
-                "media-src 'self' data: blob:",
+                "img-src 'self' data: blob: https:",
+                "media-src 'self' data: blob: https:",
                 "font-src 'self' data:",
                 "connect-src 'self'",
-                "frame-src 'self'",
+                "frame-src 'self' https:",
                 "frame-ancestors 'self'",
                 "form-action 'none'",
                 "base-uri 'self'",
