@@ -135,30 +135,12 @@ $configScript = <<<SCRIPT
             },
         };
 
-        // Disable NEW service worker registrations from inside the editor to
-        // prevent the editor's own SW from conflicting with the playground's
-        // PHP-WASM SW.  Do NOT unregister existing SWs — the playground SW is
-        // shared across all frames and killing it would break parent navigation.
-        if ("serviceWorker" in navigator) {
-            navigator.serviceWorker.register = function() {
-                console.log("[Omeka Mode] Service worker registration disabled");
-                // Return a ServiceWorkerRegistration-like stub: the editor
-                // (v4.0.0+) calls reg.addEventListener()/update() on the result,
-                // and a bare { scope: "" } made that throw
-                // ("addEventListener is not a function"), aborting editor boot
-                // inside the hidden export iframe so Web/SCORM/etc. never built.
-                return Promise.resolve({
-                    scope: "",
-                    installing: null,
-                    waiting: null,
-                    active: null,
-                    addEventListener: function() {},
-                    removeEventListener: function() {},
-                    update: function() { return Promise.resolve(); },
-                    unregister: function() { return Promise.resolve(true); }
-                });
-            };
-        }
+        // navigator.serviceWorker.register is deliberately left untouched: the
+        // editor serves its new-tab (fullscreen) preview only through its preview
+        // Service Worker, and a stubbed registration left that button dead
+        // (exelearning/exelearning issue 2773). Where the worker cannot register
+        // (e.g. the Omeka S Playground) the editor catches the rejection and
+        // falls back to the blob: preview on its own.
 
         // Handle CSS/JS 404 errors gracefully
         (function() {
